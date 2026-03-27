@@ -49,7 +49,7 @@ td{padding:2px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
 .tab{padding:7px 16px;font-size:12px;cursor:pointer;border:none;background:none;
   color:var(--tx2);border-bottom:2px solid transparent;font-family:inherit}
 .tab.on{color:var(--tx);font-weight:600;border-bottom-color:var(--win)}
-.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.bgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .tlbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;
   font-weight:600;margin:14px 0 5px}
 .pill{display:inline-block;padding:0 6px;border-radius:10px;font-size:10px;line-height:1.8;font-weight:600}
@@ -374,22 +374,67 @@ function renderScore() {
 // ═══════════════════════════════════════════════
 // RENDER — ROSTER
 // ═══════════════════════════════════════════════
-function rosterEnter(e, i, field) {
+// Flat list of all enemy slots in render order: [{bid, si}, ...]
+function enmSlots() {
+  const slots = [];
+  BLDGS.forEach(b => {
+    for (let si = 0; si < b.slots; si++) slots.push({bid: b.id, si});
+  });
+  return slots;
+}
+
+// Enter on enemy name: name[0] → name[1] → ... across all buildings
+function enmNameEnter(e, bid, si) {
   if (e.key !== 'Enter') return;
   e.preventDefault();
-  // Save current value first
-  const cur = document.getElementById(`rp_${i}_${field}`);
-  if (cur) {
-    const v = parseInt(cur.value) || 0;
-    if (field === 'h') roster[i].hPow = parseFloat(cur.value) || 0;
-    else               roster[i].tPow = parseFloat(cur.value) || 0;
-    saveLS();
+  enmDef[bid][si].name = e.target.value;
+  saveLS();
+  const slots = enmSlots();
+  const cur = slots.findIndex(s => s.bid === bid && s.si === si);
+  const next = slots[cur + 1];
+  if (next) {
+    const el = document.getElementById(`en_${next.bid}_${next.si}_n`);
+    if (el) { el.focus(); el.select(); }
   }
-  // Navigate: h → t → h of next player → t of next player → ...
+}
+
+// Enter on enemy power: power[0] → power[1] → ... across all buildings
+function enmPowEnter(e, bid, si) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  enmDef[bid][si].power = parseFloat(e.target.value) || 0;
+  saveLS(); updateButtons();
+  const slots = enmSlots();
+  const cur = slots.findIndex(s => s.bid === bid && s.si === si);
+  const next = slots[cur + 1];
+  if (next) {
+    const el = document.getElementById(`en_${next.bid}_${next.si}_p`);
+    if (el) { el.focus(); el.select(); }
+  }
+}
+
+// Enter on name: name[i] → name[i+1] → ... (auto-add player if needed)
+function rosterNameEnter(e, i) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  roster[i].name = e.target.value;
+  saveLS();
+  const ni = i + 1;
+  if (ni >= roster.length && ni < 20) addPlayer();
+  const next = document.getElementById(`rn_${ni}`);
+  if (next) { next.focus(); next.select(); }
+}
+
+// Enter on power: hPow[i] → tPow[i] → hPow[i+1] → tPow[i+1] → ...
+function rosterPowEnter(e, i, field) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (field === 'h') roster[i].hPow = parseFloat(e.target.value) || 0;
+  else               roster[i].tPow = parseFloat(e.target.value) || 0;
+  saveLS();
   let ni = i, nf = field;
   if (field === 'h') { nf = 't'; }
   else               { nf = 'h'; ni = i + 1; }
-  // If next player doesn't exist yet, add one (if under limit)
   if (ni >= roster.length && ni < 20) addPlayer();
   const next = document.getElementById(`rp_${ni}_${nf}`);
   if (next) { next.focus(); next.select(); }
@@ -411,8 +456,8 @@ function renderRoster() {
     let h = `<table><thead><tr>
       <th style="width:18px">#</th>
       <th>Player</th>
-      <th style="width:68px;text-align:right">⚔️ Heroes K</th>
-      <th style="width:68px;text-align:right">⚡ Titans K</th>
+      <th style="width:68px;text-align:right">⚔️ Heroes (K)</th>
+      <th style="width:68px;text-align:right">⚡ Titans (K)</th>
       <th style="width:30px;text-align:center" title="Titan team is E5">E5</th>
       <th style="width:34px;text-align:center" title="Risky player (for attack planning)">Risk</th>
       <th style="width:60px;text-align:center">Defense</th>
@@ -428,21 +473,22 @@ function renderRoster() {
         : '— free';
       h += `<tr>
         <td style="color:var(--tx3)">${i+1}</td>
-        <td><input type="text" value="${esc(p.name)}" placeholder="player name"
+        <td><input type="text" id="rn_${i}" value="${esc(p.name)}" placeholder="player name"
           style="width:100%;font-size:10px;padding:1px 3px"
-          onchange="roster[${i}].name=this.value;saveLS();renderRoster();renderTab(activeTab)"></td>
+          onchange="roster[${i}].name=this.value;saveLS();renderRoster();renderTab(activeTab)"
+          onkeydown="rosterNameEnter(event,${i})"></td>
         <td><input type="text" inputmode="decimal" value="${p.hPow||0}" class="num"
           id="rp_${i}_h" style="font-size:10px;padding:1px 4px"
           onfocus="if(this.value==='0')this.value=''"
           onblur="if(!this.value||isNaN(+this.value))this.value='0'"
           onchange="roster[${i}].hPow=parseFloat(this.value)||0;saveLS()"
-          onkeydown="rosterEnter(event,${i},'h')"></td>
+          onkeydown="rosterPowEnter(event,${i},'h')"></td>
         <td><input type="text" inputmode="decimal" value="${p.tPow||0}" class="num"
           id="rp_${i}_t" style="font-size:10px;padding:1px 4px"
           onfocus="if(this.value==='0')this.value=''"
           onblur="if(!this.value||isNaN(+this.value))this.value='0'"
           onchange="roster[${i}].tPow=parseFloat(this.value)||0;saveLS()"
-          onkeydown="rosterEnter(event,${i},'t')"></td>
+          onkeydown="rosterPowEnter(event,${i},'t')"></td>
         <td style="text-align:center">
           <input type="checkbox" ${p.e5!==false?'checked':''} title="E5 titans"
             onchange="roster[${i}].e5=this.checked;saveLS();renderRoster()"></td>
@@ -500,7 +546,7 @@ function renderOurDef() {
       h += `<table><thead><tr>
         <th style="width:14px">#</th>
         <th>Player</th>
-        <th style="width:60px;text-align:right">Power K</th>
+        <th style="width:60px;text-align:right">Power (K)</th>
       </tr></thead><tbody>`;
       for (let si = 0; si < b.slots; si++) {
         const sid = ourDef[b.id][si];
@@ -557,20 +603,22 @@ function renderEnmDef() {
       h += `<table><thead><tr>
         <th style="width:14px">#</th>
         <th>Enemy player</th>
-        <th style="width:66px;text-align:right">${isT?'⚡':'⚔️'} Power K</th>
+        <th style="width:66px;text-align:right">${isT?'⚡':'⚔️'} Power (K)</th>
       </tr></thead><tbody>`;
       for (let si = 0; si < b.slots; si++) {
         const s = enmDef[b.id][si];
         h += `<tr>
           <td style="color:var(--tx3)">${si+1}</td>
-          <td><input type="text" value="${esc(s.name)}" placeholder="—"
+          <td><input type="text" id="en_${b.id}_${si}_n" value="${esc(s.name)}" placeholder="—"
             style="width:100%;font-size:10px;padding:1px 3px"
-            onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS();updateButtons()"></td>
-          <td><input type="text" inputmode="decimal" value="${s.power||0}"
+            onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS();updateButtons()"
+            onkeydown="enmNameEnter(event,'${b.id}',${si})"></td>
+          <td><input type="text" inputmode="decimal" id="en_${b.id}_${si}_p" value="${s.power||0}"
             class="num" style="font-size:10px;padding:1px 4px;width:100%"
             onfocus="if(this.value==='0')this.value=''"
             onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-            onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"></td>
+            onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"
+            onkeydown="enmPowEnter(event,'${b.id}',${si})"></td>
         </tr>`;
       }
       h += `</tbody></table></div>`;
@@ -644,9 +692,9 @@ function renderResults() {
           h += `<table><thead><tr>
             <th style="width:14px">#</th>
             <th>Enemy</th>
-            <th style="width:54px;text-align:right">Def K</th>
+            <th style="width:54px;text-align:right">Def (K)</th>
             <th>Our Attacker</th>
-            <th style="width:54px;text-align:right">Atk K</th>
+            <th style="width:54px;text-align:right">Atk (K)</th>
             <th style="width:38px;text-align:center">Result</th>
           </tr></thead><tbody>`;
           defs.forEach((def, row) => {
