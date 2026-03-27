@@ -20,7 +20,8 @@ body{font-family:system-ui,sans-serif;color:var(--tx);background:var(--bg);
   padding:12px;max-width:1200px;margin:0 auto;font-size:13px}
 .btn{padding:5px 12px;font-size:11px;border:1px solid var(--bd);border-radius:5px;
   cursor:pointer;background:var(--bg);color:var(--tx);font-family:inherit}
-.btn:hover{background:var(--bg2)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-p:disabled{opacity:.35;cursor:not-allowed}
 .btn-p{background:var(--win)!important;color:#fff!important;border-color:var(--win)!important;font-weight:600}
 .btn-p:hover{opacity:.9}
 .btn-d{color:var(--lose);border-color:var(--lose)}
@@ -90,7 +91,13 @@ td{padding:2px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
   <button class="btn btn-d" style="font-size:10px;padding:3px 8px" onclick="clearPowers()">🗑 Clear powers</button>
   <span style="font-size:10px;color:var(--tx3)">🛡 = defending this war</span>
 </div>
-<div id="rosterWrap" style="margin-bottom:14px"></div>
+<div id="rosterWrap" style="margin-bottom:10px"></div>
+
+<!-- action buttons -->
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+  <button id="defBtn" class="btn btn-p" style="flex:1;min-width:180px;padding:9px" onclick="autoDefense()">🛡 Auto-distribute defense</button>
+  <button id="atkBtn" class="btn btn-p" style="flex:1;min-width:180px;padding:9px" onclick="runCalc()">⚔️ Calculate attack plan</button>
+</div>
 
 <!-- tabs -->
 <div class="tabs">
@@ -116,8 +123,8 @@ const BLDGS = [
   {id:'spring',    name:'Spring of Elem.',   ru:'Ист. Стихий',     tier:2, slots:4, type:'titans', bonus:40},
   {id:'citadel',   name:'Citadel',           ru:'Цитадель',        tier:3, slots:7, type:'heroes', bonus:60},
 ];
-// Defense fill priority (strongest buildings first)
-const DEF_PRIO = ['bridge','barracks','lighthouse','mage','fire','nature','ice','spring','foundry','citadel'];
+// Defense order: bonus desc, then tier asc (T1 before T2 at same bonus)
+const DEF_ORDER = [...BLDGS].sort((a,b) => b.bonus - a.bonus || a.tier - b.tier);
 const T3P = ['fire','nature','ice','spring'];
 
 // ═══════════════════════════════════════════════
@@ -188,7 +195,7 @@ function defSet() {
 // ═══════════════════════════════════════════════
 function addPlayer() {
   if (roster.length >= 20) { alert('Maximum 20 players.'); return; }
-  roster.push({id: nextId++, name:'', hPow:0, tPow:0});
+  roster.push({id: nextId++, name:'', hPow:0, tPow:0, e5:true, risk:false});
   renderAll();
 }
 function removePlayer(i) {
@@ -210,25 +217,35 @@ function clearPowers() {
 
 // ═══════════════════════════════════════════════
 // AUTO-DEFENSE
+// Round-robin: fill slot[0] of every building first (strongest players),
+// then slot[1], etc. — every building gets a strong defender before
+// any building gets its 2nd slot. Buildings sorted: +60 first, T1 before T2.
 // ═══════════════════════════════════════════════
 function autoDefense() {
   BLDGS.forEach(b => { ourDef[b.id] = Array(b.slots).fill(null); });
-  const hUsed = new Set(), tUsed = new Set();
-  const hPool = heroSlots(), tPool = titanSlots();
 
-  for (const bid of DEF_PRIO) {
-    const b    = BLDGS.find(x => x.id === bid);
-    const pool = b.type === 'titans' ? tPool : hPool;
-    const used = b.type === 'titans' ? tUsed  : hUsed;
-    let fi = 0;
-    for (const sid of pool) {
-      if (fi >= b.slots) break;
-      if (used.has(sid)) continue;
-      ourDef[b.id][fi] = sid;
-      used.add(sid);
-      fi++;
+  const hPool = heroSlots();  // strongest first
+  const tPool = titanSlots();
+  const hUsed = new Set(), tUsed = new Set();
+
+  const hBldgs = DEF_ORDER.filter(b => b.type === 'heroes');
+  const tBldgs = DEF_ORDER.filter(b => b.type === 'titans');
+
+  function fillRoundRobin(bldgList, pool, used) {
+    const maxSlots = Math.max(...bldgList.map(b => b.slots));
+    for (let slot = 0; slot < maxSlots; slot++) {
+      for (const b of bldgList) {
+        if (slot >= b.slots) continue;
+        const cand = pool.find(s => !used.has(s));
+        if (!cand) return;
+        ourDef[b.id][slot] = cand;
+        used.add(cand);
+      }
     }
   }
+
+  fillRoundRobin(hBldgs, hPool, hUsed);
+  fillRoundRobin(tBldgs, tPool, tUsed);
   renderAll();
 }
 
@@ -364,8 +381,8 @@ function rosterEnter(e, i, field) {
   const cur = document.getElementById(`rp_${i}_${field}`);
   if (cur) {
     const v = parseInt(cur.value) || 0;
-    if (field === 'h') roster[i].hPow = v;
-    else               roster[i].tPow = v;
+    if (field === 'h') roster[i].hPow = parseFloat(cur.value) || 0;
+    else               roster[i].tPow = parseFloat(cur.value) || 0;
     saveLS();
   }
   // Navigate: h → t → h of next player → t of next player → ...
@@ -394,8 +411,10 @@ function renderRoster() {
     let h = `<table><thead><tr>
       <th style="width:18px">#</th>
       <th>Player</th>
-      <th style="width:76px;text-align:right">⚔️ Heroes</th>
-      <th style="width:76px;text-align:right">⚡ Titans</th>
+      <th style="width:68px;text-align:right">⚔️ Heroes K</th>
+      <th style="width:68px;text-align:right">⚡ Titans K</th>
+      <th style="width:30px;text-align:center" title="Titan team is E5">E5</th>
+      <th style="width:34px;text-align:center" title="Risky player (for attack planning)">Risk</th>
       <th style="width:60px;text-align:center">Defense</th>
       <th style="width:18px"></th>
     </tr></thead><tbody>`;
@@ -412,18 +431,24 @@ function renderRoster() {
         <td><input type="text" value="${esc(p.name)}" placeholder="player name"
           style="width:100%;font-size:10px;padding:1px 3px"
           onchange="roster[${i}].name=this.value;saveLS();renderRoster();renderTab(activeTab)"></td>
-        <td><input type="text" inputmode="numeric" value="${p.hPow||0}" class="num"
+        <td><input type="text" inputmode="decimal" value="${p.hPow||0}" class="num"
           id="rp_${i}_h" style="font-size:10px;padding:1px 4px"
           onfocus="if(this.value==='0')this.value=''"
           onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="roster[${i}].hPow=parseInt(this.value)||0;saveLS()"
+          onchange="roster[${i}].hPow=parseFloat(this.value)||0;saveLS()"
           onkeydown="rosterEnter(event,${i},'h')"></td>
-        <td><input type="text" inputmode="numeric" value="${p.tPow||0}" class="num"
+        <td><input type="text" inputmode="decimal" value="${p.tPow||0}" class="num"
           id="rp_${i}_t" style="font-size:10px;padding:1px 4px"
           onfocus="if(this.value==='0')this.value=''"
           onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="roster[${i}].tPow=parseInt(this.value)||0;saveLS()"
+          onchange="roster[${i}].tPow=parseFloat(this.value)||0;saveLS()"
           onkeydown="rosterEnter(event,${i},'t')"></td>
+        <td style="text-align:center">
+          <input type="checkbox" ${p.e5!==false?'checked':''} title="E5 titans"
+            onchange="roster[${i}].e5=this.checked;saveLS();renderRoster()"></td>
+        <td style="text-align:center">
+          <input type="checkbox" ${p.risk?'checked':''} title="Risk player"
+            onchange="roster[${i}].risk=this.checked;saveLS();renderRoster()"></td>
         <td style="text-align:center;font-size:9px;color:var(--tx3);white-space:nowrap">${defTxt}</td>
         <td><button class="btn btn-d" style="padding:0 3px;font-size:8px;line-height:1.6"
           onclick="removePlayer(${i})">×</button></td>
@@ -475,7 +500,7 @@ function renderOurDef() {
       h += `<table><thead><tr>
         <th style="width:14px">#</th>
         <th>Player</th>
-        <th style="width:76px;text-align:right">Power</th>
+        <th style="width:60px;text-align:right">Power K</th>
       </tr></thead><tbody>`;
       for (let si = 0; si < b.slots; si++) {
         const sid = ourDef[b.id][si];
@@ -488,19 +513,18 @@ function renderOurDef() {
           const info = slotInfo(s);
           if (!info) return;
           const dup  = ourDef[b.id].some((x,xi) => x===s && xi!==si);
-          const lbl  = esc(info.playerName||'(unnamed)') + '  ' + info.power.toLocaleString() + (dup?' ⚠':'');
+          const lbl  = esc(info.playerName||'(unnamed)') + (dup?' ⚠':'');
           h += `<option value="${s}"${sid===s?' selected':''}>${lbl}</option>`;
         });
         h += `</select></td>
           <td style="text-align:right;font-size:11px;${inf?'font-weight:500':'color:var(--tx3)'}">
-            ${inf ? inf.power.toLocaleString() : '—'}</td>
+            ${inf ? inf.power + 'K' : '—'}</td>
         </tr>`;
       }
       h += `</tbody></table></div>`;
     });
     h += `</div>`;
   });
-  h += `<button class="btn btn-p btn-big" onclick="autoDefense()">🛡 Auto-distribute defense</button>`;
   document.getElementById('tabContent').innerHTML = h;
 }
 function clearOB(id) {
@@ -533,7 +557,7 @@ function renderEnmDef() {
       h += `<table><thead><tr>
         <th style="width:14px">#</th>
         <th>Enemy player</th>
-        <th style="width:76px;text-align:right">${isT?'⚡ Titan':'⚔️ Hero'} Power</th>
+        <th style="width:66px;text-align:right">${isT?'⚡':'⚔️'} Power K</th>
       </tr></thead><tbody>`;
       for (let si = 0; si < b.slots; si++) {
         const s = enmDef[b.id][si];
@@ -541,19 +565,18 @@ function renderEnmDef() {
           <td style="color:var(--tx3)">${si+1}</td>
           <td><input type="text" value="${esc(s.name)}" placeholder="—"
             style="width:100%;font-size:10px;padding:1px 3px"
-            onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS()"></td>
-          <td><input type="text" inputmode="numeric" value="${s.power||0}"
+            onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS();updateButtons()"></td>
+          <td><input type="text" inputmode="decimal" value="${s.power||0}"
             class="num" style="font-size:10px;padding:1px 4px;width:100%"
             onfocus="if(this.value==='0')this.value=''"
             onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-            onchange="enmDef['${b.id}'][${si}].power=parseInt(this.value)||0;saveLS()"></td>
+            onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"></td>
         </tr>`;
       }
       h += `</tbody></table></div>`;
     });
     h += `</div>`;
   });
-  h += `<button class="btn btn-p btn-big" onclick="runCalc()">⚔️ Calculate attack plan</button>`;
   document.getElementById('tabContent').innerHTML = h;
 }
 function clearEB(id) {
@@ -621,9 +644,9 @@ function renderResults() {
           h += `<table><thead><tr>
             <th style="width:14px">#</th>
             <th>Enemy</th>
-            <th style="width:62px;text-align:right">Def.pw</th>
+            <th style="width:54px;text-align:right">Def K</th>
             <th>Our Attacker</th>
-            <th style="width:62px;text-align:right">Atk.pw</th>
+            <th style="width:54px;text-align:right">Atk K</th>
             <th style="width:38px;text-align:center">Result</th>
           </tr></thead><tbody>`;
           defs.forEach((def, row) => {
@@ -634,11 +657,11 @@ function renderResults() {
             h += `<tr${rb?` style="background:${rb}"`:''}>
               <td style="color:var(--tx3)">${row+1}</td>
               <td>${esc(def.name||'—')}</td>
-              <td style="text-align:right">${def.power>0?def.power.toLocaleString():'—'}</td>
+              <td style="text-align:right">${def.power>0?def.power+'K':'—'}</td>
               <td style="${atk?'font-weight:500':'color:var(--tx3)'}">
                 ${atk ? esc(atk.playerName||'(unnamed)') : '—'}</td>
               <td style="text-align:right;${atk?'':'color:var(--tx3)'}">
-                ${atk?atk.power.toLocaleString():'—'}</td>
+                ${atk?atk.power+'K':'—'}</td>
               <td style="text-align:center">
                 ${res==='win'
                   ? '<span class="pill pw">WIN</span>'
@@ -670,7 +693,7 @@ function renderResults() {
     h += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
     free.forEach(a => {
       h += `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--bg2);border:1px solid var(--bd)">
-        ${a.icon} ${esc(a.name||'?')} <span style="color:var(--tx3)">${a.power.toLocaleString()}</span>
+        ${a.icon} ${esc(a.name||'?')} <span style="color:var(--tx3)">${a.power}K</span>
       </span>`;
     });
     h += `</div>`;
@@ -695,12 +718,27 @@ function buildSummary() {
       const slot = p.slots.find(s => s.defIdx===row);
       const atk  = slot?.sid ? slotInfo(slot.sid) : null;
       const res  = slot?.result==='win' ? 'WIN' : '---';
-      const aStr = atk ? `${atk.playerName||'?'} (${atk.power.toLocaleString()})` : 'nobody';
-      lines.push(`  ${row+1}. ${aStr} vs ${def.name||'?'} (${def.power.toLocaleString()}) → ${res}`);
+      const aStr = atk ? `${atk.playerName||'?'} (${atk.power}K)` : 'nobody';
+      lines.push(`  ${row+1}. ${aStr} vs ${def.name||'?'} (${def.power}K) → ${res}`);
     });
     lines.push('');
   });
   return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════
+// MIGRATION: old saves store raw power, new stores K
+// If any player has power > 9999, assume it's raw → divide by 1000
+// ═══════════════════════════════════════════════
+function migrateRoster(r) {
+  if (!r || !r.length) return r;
+  const needsMigration = r.some(p => (p.hPow > 9999) || (p.tPow > 9999));
+  if (!needsMigration) return r;
+  return r.map(p => ({
+    ...p,
+    hPow: p.hPow > 9999 ? Math.round(p.hPow / 1000 * 10) / 10 : p.hPow,
+    tPow: p.tPow > 9999 ? Math.round(p.tPow / 1000 * 10) / 10 : p.tPow,
+  }));
 }
 
 // ═══════════════════════════════════════════════
@@ -719,7 +757,13 @@ function doImport(e) {
   r.onload = function(ev) {
     try {
       const d = JSON.parse(ev.target.result);
-      if (d.roster) roster = d.roster;
+      if (d.roster) roster = d.roster.map(p => ({
+        ...p,
+        hPow: normPow(p.hPow),
+        tPow: normPow(p.tPow),
+        e5: p.e5 !== undefined ? p.e5 : true,
+        risk: p.risk || false,
+      }));
       if (d.nextId) nextId = d.nextId;
       if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
       if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
@@ -755,7 +799,13 @@ function loadLS() {
   try {
     const raw = localStorage.getItem(LS); if (!raw) return false;
     const d = JSON.parse(raw);
-    if (d.roster) roster = d.roster;
+    if (d.roster) roster = d.roster.map(p => ({
+      ...p,
+      hPow: normPow(p.hPow),
+      tPow: normPow(p.tPow),
+      e5: p.e5 !== undefined ? p.e5 : true,
+      risk: p.risk || false,
+    }));
     if (d.nextId) nextId = d.nextId;
     if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
     if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
@@ -770,7 +820,16 @@ function loadLS() {
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-function renderAll() { renderScore(); renderRoster(); renderTab(activeTab); saveLS(); }
+function updateButtons() {
+  const hasPlayers = roster.length > 0;
+  const hasEnemy   = BLDGS.some(b => enmDef[b.id].some(s => s.power > 0 || s.name.trim()));
+  const db = document.getElementById('defBtn');
+  const ab = document.getElementById('atkBtn');
+  if (db) db.disabled = !hasPlayers;
+  if (ab) ab.disabled = !hasEnemy;
+}
+
+function renderAll() { renderScore(); renderRoster(); renderTab(activeTab); updateButtons(); saveLS(); }
 
 const _ok = loadLS();
 renderAll();
