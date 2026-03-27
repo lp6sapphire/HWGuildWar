@@ -413,7 +413,9 @@ function enmPowEnter(e, bid, si) {
   }
 }
 
-// Enter on name: name[i] → name[i+1] → ... (auto-add player if needed)
+// Powers stored and displayed in K (e.g. 450 = 450K)
+function normPow(v) { return parseFloat(v) || 0; }
+
 function rosterNameEnter(e, i) {
   if (e.key !== 'Enter') return;
   e.preventDefault();
