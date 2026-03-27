@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Guild War Planner</title>
+<style>
+:root{
+  --bg:#fff;--bg2:#f5f5f0;--tx:#1a1a1a;--tx2:#666;--tx3:#999;
+  --bd:#ddd;--win:#0F6E56;--winbg:rgba(29,158,117,.1);
+  --lose:#A32D2D;--losebg:rgba(226,75,74,.08);
+  --warn:#854F0B;--warnbg:rgba(186,117,23,.12);
+  --acc:#2563eb;--mono:Consolas,monospace
+}
+@media(prefers-color-scheme:dark){
+  :root{--bg:#1a1a1a;--bg2:#252525;--tx:#e0e0e0;--tx2:#aaa;--tx3:#777;--bd:#444}
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;color:var(--tx);background:var(--bg);
+  padding:12px;max-width:1200px;margin:0 auto;font-size:13px}
+.btn{padding:5px 12px;font-size:11px;border:1px solid var(--bd);border-radius:5px;
+  cursor:pointer;background:var(--bg);color:var(--tx);font-family:inherit}
+.btn:hover{background:var(--bg2)}
+.btn-p{background:var(--win)!important;color:#fff!important;border-color:var(--win)!important;font-weight:600}
+.btn-p:hover{opacity:.9}
+.btn-d{color:var(--lose);border-color:var(--lose)}
+.btn-big{padding:10px 20px;font-size:13px;width:100%;margin-top:10px;border-radius:6px}
+input{font-size:11px;padding:3px 5px;border:1px solid var(--bd);border-radius:4px;
+  background:var(--bg);color:var(--tx);font-family:inherit;box-sizing:border-box}
+select{font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;
+  background:var(--bg);color:var(--tx);font-family:inherit;width:100%}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{font-size:10px;color:var(--tx3);font-weight:400;padding:3px 4px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:2px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.card{background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:6px}
+.card.cap{border:1.5px solid var(--win)}
+.card.fail{border:1.5px solid var(--lose)}
+.card.part{border:1.5px solid var(--warn)}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;
+  background:var(--winbg);color:var(--win);font-weight:600}
+.sbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--bd);
+  padding:6px 0;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sm{text-align:center;min-width:68px}
+.sm small{font-size:10px;color:var(--tx2);display:block}
+.sm b{font-size:18px;font-weight:500}
+.sdiv{border-left:1px solid var(--bd);padding-left:8px}
+.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:12px}
+.tab{padding:7px 16px;font-size:12px;cursor:pointer;border:none;background:none;
+  color:var(--tx2);border-bottom:2px solid transparent;font-family:inherit}
+.tab.on{color:var(--tx);font-weight:600;border-bottom-color:var(--win)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.tlbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;
+  font-weight:600;margin:14px 0 5px}
+.pill{display:inline-block;padding:0 6px;border-radius:10px;font-size:10px;line-height:1.8;font-weight:600}
+.pw{background:var(--winbg);color:var(--win)}
+.pl{background:var(--losebg);color:var(--lose)}
+.pe{background:rgba(128,128,128,.1);color:#888}
+.cbox{font-family:var(--mono);font-size:10px;padding:8px;background:var(--bg2);
+  border-radius:6px;margin-top:8px;white-space:pre-wrap;user-select:all;line-height:1.7}
+.num{text-align:right;width:100%}
+#fileInput{display:none}
+</style>
+</head>
+<body>
+
+<!-- header -->
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+  <b style="font-size:16px">⚔️ Guild War Planner</b>
+  <span style="flex:1"></span>
+  <span style="font-size:11px;color:var(--tx3)">👻 Ghost Bridge: <b style="color:var(--warn)">always active</b></span>
+  <label style="font-size:11px;display:flex;align-items:center;gap:4px">
+    Pts per fight win:
+    <input type="number" id="fptInp" value="20" min="1" max="999" style="width:44px"
+      onchange="fightPts=parseInt(this.value)||10;saveLS();renderScore()">
+  </label>
+  <button class="btn" onclick="doExport()">💾 Export</button>
+  <button class="btn" onclick="document.getElementById('fileInput').click()">📂 Import</button>
+  <button class="btn btn-d" style="font-size:10px;padding:3px 8px" onclick="resetWar()">🗑 Reset war</button>
+  <input type="file" id="fileInput" accept=".json" onchange="doImport(event)">
+</div>
+
+<!-- score bar -->
+<div class="sbar" id="scoreBar"></div>
+
+<!-- roster -->
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+  <b style="font-size:14px">Roster</b>
+  <button class="btn" style="font-size:11px" onclick="addPlayer()" id="addBtn">+ Player</button>
+  <button class="btn" style="font-size:11px" onclick="sortRoster();renderAll()">↕ Sort</button>
+  <button class="btn btn-d" style="font-size:10px;padding:3px 8px" onclick="clearPowers()">🗑 Clear powers</button>
+  <span style="font-size:10px;color:var(--tx3)">🛡 = defending this war</span>
+</div>
+<div id="rosterWrap" style="margin-bottom:14px"></div>
+
+<!-- tabs -->
+<div class="tabs">
+  <button class="tab on" id="tab0" onclick="setTab(0)">🛡 Our Defense</button>
+  <button class="tab"    id="tab1" onclick="setTab(1)">🗡 Enemy Defense</button>
+  <button class="tab"    id="tab2" onclick="setTab(2)">📊 Attack Plan</button>
+</div>
+<div id="tabContent"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// BUILDINGS
+// ═══════════════════════════════════════════════
+const BLDGS = [
+  {id:'bridge',    name:'Bridge',            ru:'Мост',            tier:1, slots:4, type:'titans', bonus:60},
+  {id:'barracks',  name:'Barracks',          ru:'Казармы',         tier:1, slots:3, type:'heroes', bonus:40},
+  {id:'lighthouse',name:'Lighthouse',        ru:'Маяк',            tier:1, slots:3, type:'heroes', bonus:40},
+  {id:'mage',      name:'Mage Academy',      ru:'Акад. Магов',     tier:1, slots:3, type:'heroes', bonus:40},
+  {id:'foundry',   name:'Foundry',           ru:'Литейная',        tier:2, slots:4, type:'heroes', bonus:40},
+  {id:'fire',      name:'Bastion of Fire',   ru:'Бастион Огня',    tier:2, slots:4, type:'titans', bonus:40},
+  {id:'nature',    name:'Gates of Nature',   ru:'Врата Природы',   tier:2, slots:4, type:'titans', bonus:40},
+  {id:'ice',       name:'Bastion of Ice',    ru:'Бастион Льда',    tier:2, slots:4, type:'titans', bonus:40},
+  {id:'spring',    name:'Spring of Elem.',   ru:'Ист. Стихий',     tier:2, slots:4, type:'titans', bonus:40},
+  {id:'citadel',   name:'Citadel',           ru:'Цитадель',        tier:3, slots:7, type:'heroes', bonus:60},
+];
+// Defense fill priority (strongest buildings first)
+const DEF_PRIO = ['bridge','barracks','lighthouse','mage','fire','nature','ice','spring','foundry','citadel'];
+const T3P = ['fire','nature','ice','spring'];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+// roster: [{id, name, hPow, tPow}]
+// ourDef: buildingId → ["h_<id>" | "t_<id>" | null, ...]
+// enmDef: buildingId → [{name, power}, ...]
+let roster = [];
+let ourDef  = {};
+let enmDef  = {};
+let atkPlan = null;
+let ghostBridge = true; // always active
+let fightPts = 20;
+let nextId = 1;
+let activeTab = 0;
+
+BLDGS.forEach(b => {
+  ourDef[b.id] = Array(b.slots).fill(null);
+  enmDef[b.id] = Array.from({length: b.slots}, () => ({name:'', power:0}));
+});
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Parse a slot id like "h_5" or "t_5"
+function slotInfo(sid) {
+  if (!sid) return null;
+  const [type, idStr] = sid.split('_');
+  const id = parseInt(idStr);
+  const p  = roster.find(r => r.id === id);
+  if (!p) return null;
+  return {
+    sid,
+    playerName: p.name,
+    power: type === 'h' ? p.hPow : p.tPow,
+    type:  type === 'h' ? 'heroes' : 'titans',
+  };
+}
+
+// All hero slot-ids sorted strongest first
+function heroSlots()  {
+  return roster
+    .filter(r => r.hPow > 0)
+    .sort((a,b) => b.hPow - a.hPow)
+    .map(r => 'h_'+r.id);
+}
+function titanSlots() {
+  return roster
+    .filter(r => r.tPow > 0)
+    .sort((a,b) => b.tPow - a.tPow)
+    .map(r => 't_'+r.id);
+}
+
+// Set of all slot-ids currently assigned to defense
+function defSet() {
+  const s = new Set();
+  BLDGS.forEach(b => ourDef[b.id].forEach(d => { if (d) s.add(d); }));
+  return s;
+}
+
+// ═══════════════════════════════════════════════
+// ROSTER OPS
+// ═══════════════════════════════════════════════
+function addPlayer() {
+  if (roster.length >= 20) { alert('Maximum 20 players.'); return; }
+  roster.push({id: nextId++, name:'', hPow:0, tPow:0});
+  renderAll();
+}
+function removePlayer(i) {
+  const id = roster[i].id;
+  BLDGS.forEach(b => {
+    ourDef[b.id] = ourDef[b.id].map(d => (d==='h_'+id || d==='t_'+id) ? null : d);
+  });
+  roster.splice(i, 1);
+  renderAll();
+}
+function sortRoster() {
+  roster.sort((a,b) => Math.max(b.hPow,b.tPow) - Math.max(a.hPow,a.tPow));
+}
+function clearPowers() {
+  if (!confirm('Clear all power values?')) return;
+  roster.forEach(p => { p.hPow = 0; p.tPow = 0; });
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════
+// AUTO-DEFENSE
+// ═══════════════════════════════════════════════
+function autoDefense() {
+  BLDGS.forEach(b => { ourDef[b.id] = Array(b.slots).fill(null); });
+  const hUsed = new Set(), tUsed = new Set();
+  const hPool = heroSlots(), tPool = titanSlots();
+
+  for (const bid of DEF_PRIO) {
+    const b    = BLDGS.find(x => x.id === bid);
+    const pool = b.type === 'titans' ? tPool : hPool;
+    const used = b.type === 'titans' ? tUsed  : hUsed;
+    let fi = 0;
+    for (const sid of pool) {
+      if (fi >= b.slots) break;
+      if (used.has(sid)) continue;
+      ourDef[b.id][fi] = sid;
+      used.add(sid);
+      fi++;
+    }
+  }
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════
+// ATTACK OPTIMIZER
+// ═══════════════════════════════════════════════
+function calcAtk() {
+  const ds = defSet();
+
+  // Free attackers per type, sorted weakest→strongest (to use weakest winner)
+  const avH = roster
+    .filter(r => !ds.has('h_'+r.id) && r.hPow > 0)
+    .sort((a,b) => a.hPow - b.hPow)
+    .map(r => ({sid:'h_'+r.id, power:r.hPow}));
+  const avT = roster
+    .filter(r => !ds.has('t_'+r.id) && r.tPow > 0)
+    .sort((a,b) => a.tPow - b.tPow)
+    .map(r => ({sid:'t_'+r.id, power:r.tPow}));
+
+  const usedH = new Set(), usedT = new Set();
+  const plan  = {};
+  BLDGS.forEach(b => plan[b.id] = {slots:[], captured:false, bonus:0, locked:true});
+
+  function unlockable(id) {
+    const b = BLDGS.find(x => x.id === id);
+    if (b.tier === 1) return true;
+    if (b.tier === 2) return plan['bridge']?.captured || ghostBridge;
+    if (b.tier === 3) return T3P.some(pid => plan[pid]?.captured);
+    return false;
+  }
+
+  function assign(b) {
+    const defs = enmDef[b.id]
+      .map((s,i) => ({...s, i}))
+      .filter(s => s.power > 0 || s.name.trim());
+    if (!defs.length) return;
+
+    const pool = b.type === 'heroes' ? avH : avT;
+    const used = b.type === 'heroes' ? usedH : usedT;
+    const free = () => pool.filter(x => !used.has(x.sid));
+
+    // Try full capture: hardest def first, weakest winning attacker
+    const sortedHard = [...defs].sort((a,x) => x.power - a.power);
+    const tmp = [], tmpU = new Set(); let canFull = true;
+    for (const def of sortedHard) {
+      const cand = free().filter(x => !tmpU.has(x.sid) && x.power > def.power);
+      if (!cand.length) { canFull = false; break; }
+      cand.sort((a,x) => a.power - x.power);
+      tmp.push({defIdx: def.i, sid: cand[0].sid, result:'win'});
+      tmpU.add(cand[0].sid);
+    }
+
+    if (canFull) {
+      tmp.forEach(m => used.add(m.sid));
+      plan[b.id].slots    = tmp;
+      plan[b.id].captured = true;
+      plan[b.id].bonus    = b.bonus;
+    } else {
+      // Partial: win as many easy slots as possible
+      const slots = [];
+      const sortedEasy = [...defs].sort((a,x) => a.power - x.power);
+      for (const def of sortedEasy) {
+        const cand = free().filter(x => x.power > def.power);
+        if (cand.length) {
+          cand.sort((a,x) => a.power - x.power);
+          slots.push({defIdx: def.i, sid: cand[0].sid, result:'win'});
+          used.add(cand[0].sid);
+        } else {
+          slots.push({defIdx: def.i, sid: null, result:'none'});
+        }
+      }
+      plan[b.id].slots    = slots;
+      plan[b.id].captured = false;
+      plan[b.id].bonus    = 0;
+    }
+  }
+
+  // Priority: tier1 first, then bonus desc
+  const ordered = [...BLDGS].sort((a,b) => a.tier - b.tier || b.bonus - a.bonus);
+
+  for (let pass = 0; pass < 3; pass++) {
+    for (const b of ordered) {
+      if (unlockable(b.id)) {
+        plan[b.id].locked = false;
+        if (!plan[b.id].slots.length) assign(b);
+      }
+    }
+  }
+
+  atkPlan = plan;
+}
+
+// ═══════════════════════════════════════════════
+// SCORE
+// ═══════════════════════════════════════════════
+function getScore() {
+  if (!atkPlan) return {wins:0, bonus:0, total:0, caps:0};
+  let wins=0, bonus=0, caps=0;
+  BLDGS.forEach(b => {
+    const p = atkPlan[b.id];
+    if (!p || p.locked) return;
+    wins  += p.slots.filter(s => s.result==='win').length;
+    bonus += p.bonus;
+    if (p.captured) caps++;
+  });
+  return {wins, bonus, total: wins*fightPts+bonus, caps};
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — SCORE BAR
+// ═══════════════════════════════════════════════
+function renderScore() {
+  const sc = getScore();
+  const ds = defSet();
+  const fH = roster.filter(r => !ds.has('h_'+r.id) && r.hPow > 0).length;
+  const fT = roster.filter(r => !ds.has('t_'+r.id) && r.tPow > 0).length;
+  document.getElementById('scoreBar').innerHTML =
+    `<div class="sm"><small>Wins</small><b style="color:var(--win)">${sc.wins}</b></div>
+     <div class="sm"><small>×${fightPts} pts</small><b>${sc.wins*fightPts}</b></div>
+     <div class="sm sdiv"><small>Bonus</small><b style="color:var(--acc)">${sc.bonus}</b></div>
+     <div class="sm sdiv"><small>TOTAL</small><b style="font-size:20px;color:var(--win)">${sc.total}</b></div>
+     <div class="sm sdiv"><small>Captures</small><b style="color:var(--acc)">${sc.caps}/${BLDGS.length}</b></div>
+     <div class="sm sdiv"><small>Free ⚔️/⚡</small><b style="color:var(--tx2)">${fH}/${fT}</b></div>`;
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — ROSTER
+// ═══════════════════════════════════════════════
+function rosterEnter(e, i, field) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  // Save current value first
+  const cur = document.getElementById(`rp_${i}_${field}`);
+  if (cur) {
+    const v = parseInt(cur.value) || 0;
+    if (field === 'h') roster[i].hPow = v;
+    else               roster[i].tPow = v;
+    saveLS();
+  }
+  // Navigate: h → t → h of next player → t of next player → ...
+  let ni = i, nf = field;
+  if (field === 'h') { nf = 't'; }
+  else               { nf = 'h'; ni = i + 1; }
+  // If next player doesn't exist yet, add one (if under limit)
+  if (ni >= roster.length && ni < 20) addPlayer();
+  const next = document.getElementById(`rp_${ni}_${nf}`);
+  if (next) { next.focus(); next.select(); }
+}
+
+function renderRoster() {
+  const btn = document.getElementById('addBtn');
+  if (btn) btn.textContent = `+ Player (${roster.length}/20)`;
+  const wrap = document.getElementById('rosterWrap');
+  if (!roster.length) {
+    wrap.innerHTML = '<div style="color:var(--tx3);font-size:11px">No players yet. Click "+ Player".</div>';
+    return;
+  }
+  const ds = defSet();
+  // Split into 2 columns
+  const half = Math.ceil(roster.length / 2);
+  const mkTable = (from, to) => {
+    if (from >= roster.length) return '';
+    let h = `<table><thead><tr>
+      <th style="width:18px">#</th>
+      <th>Player</th>
+      <th style="width:76px;text-align:right">⚔️ Heroes</th>
+      <th style="width:76px;text-align:right">⚡ Titans</th>
+      <th style="width:60px;text-align:center">Defense</th>
+      <th style="width:18px"></th>
+    </tr></thead><tbody>`;
+    for (let i = from; i < Math.min(to, roster.length); i++) {
+      const p    = roster[i];
+      const hDef = ds.has('h_'+p.id);
+      const tDef = ds.has('t_'+p.id);
+      const defTxt = hDef && tDef ? '⚔️⚡🛡'
+        : hDef ? '⚔️🛡 ⚡free'
+        : tDef ? '⚡🛡 ⚔️free'
+        : '— free';
+      h += `<tr>
+        <td style="color:var(--tx3)">${i+1}</td>
+        <td><input type="text" value="${esc(p.name)}" placeholder="player name"
+          style="width:100%;font-size:10px;padding:1px 3px"
+          onchange="roster[${i}].name=this.value;saveLS();renderRoster();renderTab(activeTab)"></td>
+        <td><input type="text" inputmode="numeric" value="${p.hPow||0}" class="num"
+          id="rp_${i}_h" style="font-size:10px;padding:1px 4px"
+          onfocus="if(this.value==='0')this.value=''"
+          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
+          onchange="roster[${i}].hPow=parseInt(this.value)||0;saveLS()"
+          onkeydown="rosterEnter(event,${i},'h')"></td>
+        <td><input type="text" inputmode="numeric" value="${p.tPow||0}" class="num"
+          id="rp_${i}_t" style="font-size:10px;padding:1px 4px"
+          onfocus="if(this.value==='0')this.value=''"
+          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
+          onchange="roster[${i}].tPow=parseInt(this.value)||0;saveLS()"
+          onkeydown="rosterEnter(event,${i},'t')"></td>
+        <td style="text-align:center;font-size:9px;color:var(--tx3);white-space:nowrap">${defTxt}</td>
+        <td><button class="btn btn-d" style="padding:0 3px;font-size:8px;line-height:1.6"
+          onclick="removePlayer(${i})">×</button></td>
+      </tr>`;
+    }
+    return h + `</tbody></table>`;
+  };
+  wrap.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+    ${mkTable(0, half)}${mkTable(half, roster.length)}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════
+function setTab(n) {
+  activeTab = n;
+  [0,1,2].forEach(i => document.getElementById('tab'+i).classList.toggle('on', i===n));
+  renderTab(n);
+}
+function renderTab(n) {
+  if (n===0) renderOurDef();
+  else if (n===1) renderEnmDef();
+  else renderResults();
+}
+
+// ═══════════════════════════════════════════════
+// TAB 0 — OUR DEFENSE
+// ═══════════════════════════════════════════════
+function renderOurDef() {
+  let h = '';
+  [1,2,3].forEach(tier => {
+    h += `<div class="tlbl">Tier ${tier}</div><div class="bgrid">`;
+    BLDGS.filter(b => b.tier===tier).forEach(b => {
+      const isT    = b.type === 'titans';
+      const pool   = isT ? titanSlots() : heroSlots();
+      const filled = ourDef[b.id].filter(x => x !== null).length;
+
+      h += `<div class="card">`;
+      h += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+        <b style="font-size:12px">${b.name}</b>
+        <span style="font-size:10px;color:var(--tx3)">${b.ru}</span>
+        <span style="flex:1"></span>
+        <span>${isT?'⚡':'⚔️'}</span>
+        <span style="font-size:10px;color:var(--tx2)">+${b.bonus}</span>
+        <span style="font-size:10px;color:var(--tx3)">${filled}/${b.slots}</span>
+        <button class="btn btn-d" style="padding:0 4px;font-size:9px" onclick="clearOB('${b.id}')">🗑</button>
+      </div>`;
+      h += `<table><thead><tr>
+        <th style="width:14px">#</th>
+        <th>Player</th>
+        <th style="width:76px;text-align:right">Power</th>
+      </tr></thead><tbody>`;
+      for (let si = 0; si < b.slots; si++) {
+        const sid = ourDef[b.id][si];
+        const inf = slotInfo(sid);
+        h += `<tr>
+          <td style="color:var(--tx3)">${si+1}</td>
+          <td><select onchange="ourDef['${b.id}'][${si}]=this.value||null;saveLS();renderAll()">
+            <option value="">— empty —</option>`;
+        pool.forEach(s => {
+          const info = slotInfo(s);
+          if (!info) return;
+          const dup  = ourDef[b.id].some((x,xi) => x===s && xi!==si);
+          const lbl  = esc(info.playerName||'(unnamed)') + '  ' + info.power.toLocaleString() + (dup?' ⚠':'');
+          h += `<option value="${s}"${sid===s?' selected':''}>${lbl}</option>`;
+        });
+        h += `</select></td>
+          <td style="text-align:right;font-size:11px;${inf?'font-weight:500':'color:var(--tx3)'}">
+            ${inf ? inf.power.toLocaleString() : '—'}</td>
+        </tr>`;
+      }
+      h += `</tbody></table></div>`;
+    });
+    h += `</div>`;
+  });
+  h += `<button class="btn btn-p btn-big" onclick="autoDefense()">🛡 Auto-distribute defense</button>`;
+  document.getElementById('tabContent').innerHTML = h;
+}
+function clearOB(id) {
+  ourDef[id] = Array(BLDGS.find(b=>b.id===id).slots).fill(null);
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════
+// TAB 1 — ENEMY DEFENSE
+// ═══════════════════════════════════════════════
+function renderEnmDef() {
+  let h = `<div style="font-size:11px;color:var(--tx3);margin-bottom:8px">
+    Enter enemy defenders. Tier 2/3 unlock chain is resolved automatically on calculation.
+  </div>`;
+  [1,2,3].forEach(tier => {
+    h += `<div class="tlbl">Tier ${tier}</div><div class="bgrid">`;
+    BLDGS.filter(b => b.tier===tier).forEach(b => {
+      const isT   = b.type === 'titans';
+      const filled = enmDef[b.id].filter(s => s.power>0||s.name.trim()).length;
+      h += `<div class="card">`;
+      h += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+        <b style="font-size:12px">${b.name}</b>
+        <span style="font-size:10px;color:var(--tx3)">${b.ru}</span>
+        <span style="flex:1"></span>
+        <span>${isT?'⚡':'⚔️'}</span>
+        <span style="font-size:10px;color:var(--tx2)">+${b.bonus}</span>
+        <span style="font-size:10px;color:var(--tx3)">${filled}/${b.slots}</span>
+        <button class="btn btn-d" style="padding:0 4px;font-size:9px" onclick="clearEB('${b.id}')">🗑</button>
+      </div>`;
+      h += `<table><thead><tr>
+        <th style="width:14px">#</th>
+        <th>Enemy player</th>
+        <th style="width:76px;text-align:right">${isT?'⚡ Titan':'⚔️ Hero'} Power</th>
+      </tr></thead><tbody>`;
+      for (let si = 0; si < b.slots; si++) {
+        const s = enmDef[b.id][si];
+        h += `<tr>
+          <td style="color:var(--tx3)">${si+1}</td>
+          <td><input type="text" value="${esc(s.name)}" placeholder="—"
+            style="width:100%;font-size:10px;padding:1px 3px"
+            onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS()"></td>
+          <td><input type="text" inputmode="numeric" value="${s.power||0}"
+            class="num" style="font-size:10px;padding:1px 4px;width:100%"
+            onfocus="if(this.value==='0')this.value=''"
+            onblur="if(!this.value||isNaN(+this.value))this.value='0'"
+            onchange="enmDef['${b.id}'][${si}].power=parseInt(this.value)||0;saveLS()"></td>
+        </tr>`;
+      }
+      h += `</tbody></table></div>`;
+    });
+    h += `</div>`;
+  });
+  h += `<button class="btn btn-p btn-big" onclick="runCalc()">⚔️ Calculate attack plan</button>`;
+  document.getElementById('tabContent').innerHTML = h;
+}
+function clearEB(id) {
+  enmDef[id] = Array.from({length: BLDGS.find(b=>b.id===id).slots}, ()=>({name:'',power:0}));
+  saveLS();
+  renderTab(activeTab);
+}
+
+// ═══════════════════════════════════════════════
+// TAB 2 — RESULTS
+// ═══════════════════════════════════════════════
+function runCalc() { calcAtk(); renderScore(); setTab(2); }
+
+function renderResults() {
+  if (!atkPlan) {
+    document.getElementById('tabContent').innerHTML = `
+      <div style="padding:30px;text-align:center;color:var(--tx3)">
+        <div style="font-size:32px;margin-bottom:10px">📊</div>
+        Open <b>Enemy Defense</b>, enter data, press <b>Calculate attack plan</b>.
+      </div>`;
+    return;
+  }
+  const sc = getScore();
+  let h = '';
+
+  h += `<div class="card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:13px;font-weight:600">Attack Plan</span>
+    <span style="flex:1"></span>
+    <span style="font-size:12px">Caps: <b style="color:var(--win)">${sc.caps}</b></span>
+    <span style="font-size:12px">Fights: <b style="color:var(--win)">${sc.wins}×${fightPts}=${sc.wins*fightPts}</b></span>
+    <span style="font-size:12px">Bonus: <b style="color:var(--acc)">${sc.bonus}</b></span>
+    <span style="font-size:15px;font-weight:700">Total: <b style="color:var(--win)">${sc.total}</b></span>
+    <button class="btn" onclick="runCalc()">↻ Recalculate</button>
+  </div>`;
+
+  [1,2,3].forEach(tier => {
+    h += `<div class="tlbl">Tier ${tier}</div><div class="bgrid">`;
+    BLDGS.filter(b => b.tier===tier).forEach(b => {
+      const p     = atkPlan[b.id];
+      const cap   = p?.captured, locked = p?.locked;
+      const wins  = p?.slots.filter(s => s.result==='win').length || 0;
+      const defs  = enmDef[b.id].map((s,i)=>({...s,i})).filter(s=>s.power>0||s.name.trim());
+      const total = defs.length;
+      let cc = 'card';
+      if (!locked) {
+        if      (cap)                   cc += ' cap';
+        else if (wins > 0 && wins < total) cc += ' part';
+        else if (total > 0 && wins === 0)  cc += ' fail';
+      }
+      h += `<div class="${cc}" style="${locked?'opacity:.4':''}">`;
+      h += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:7px">
+        <b style="font-size:12px">${b.name}</b>
+        <span style="font-size:10px;color:var(--tx3)">${b.ru}</span>
+        <span style="flex:1"></span>`;
+      if      (locked)       h += `<span style="font-size:10px;color:#888">🔒 Locked</span>`;
+      else if (cap)          h += `<span class="tag">🏴 Captured +${b.bonus}</span>`;
+      else if (wins > 0)     h += `<span style="font-size:10px;color:var(--warn)">${wins}/${total} won</span>`;
+      else if (total > 0)    h += `<span style="font-size:10px;color:var(--lose)">No wins</span>`;
+      else                   h += `<span style="font-size:10px;color:var(--tx3)">No defenders</span>`;
+      h += `</div>`;
+      if (!locked) {
+        if (!defs.length) {
+          h += `<div style="font-size:10px;color:var(--tx3)">No enemy defenders entered.</div>`;
+        } else {
+          h += `<table><thead><tr>
+            <th style="width:14px">#</th>
+            <th>Enemy</th>
+            <th style="width:62px;text-align:right">Def.pw</th>
+            <th>Our Attacker</th>
+            <th style="width:62px;text-align:right">Atk.pw</th>
+            <th style="width:38px;text-align:center">Result</th>
+          </tr></thead><tbody>`;
+          defs.forEach((def, row) => {
+            const slot = p?.slots.find(s => s.defIdx===def.i);
+            const atk  = slot?.sid ? slotInfo(slot.sid) : null;
+            const res  = slot?.result || 'none';
+            const rb   = res==='win' ? 'var(--winbg)' : '';
+            h += `<tr${rb?` style="background:${rb}"`:''}>
+              <td style="color:var(--tx3)">${row+1}</td>
+              <td>${esc(def.name||'—')}</td>
+              <td style="text-align:right">${def.power>0?def.power.toLocaleString():'—'}</td>
+              <td style="${atk?'font-weight:500':'color:var(--tx3)'}">
+                ${atk ? esc(atk.playerName||'(unnamed)') : '—'}</td>
+              <td style="text-align:right;${atk?'':'color:var(--tx3)'}">
+                ${atk?atk.power.toLocaleString():'—'}</td>
+              <td style="text-align:center">
+                ${res==='win'
+                  ? '<span class="pill pw">WIN</span>'
+                  : '<span class="pill pe">—</span>'}
+              </td>
+            </tr>`;
+          });
+          h += `</tbody></table>`;
+        }
+      }
+      h += `</div>`;
+    });
+    h += `</div>`;
+  });
+
+  // Unassigned
+  const ds2 = defSet();
+  const usedSids = new Set();
+  BLDGS.forEach(b => atkPlan[b.id]?.slots.forEach(s => { if(s.sid) usedSids.add(s.sid); }));
+  const free = [];
+  roster.forEach(r => {
+    if (!ds2.has('h_'+r.id) && !usedSids.has('h_'+r.id) && r.hPow > 0)
+      free.push({name: r.name, power: r.hPow, icon:'⚔️'});
+    if (!ds2.has('t_'+r.id) && !usedSids.has('t_'+r.id) && r.tPow > 0)
+      free.push({name: r.name, power: r.tPow, icon:'⚡'});
+  });
+  if (free.length) {
+    h += `<div style="margin-top:10px;font-size:11px;font-weight:600;color:var(--tx2)">Unassigned (${free.length})</div>`;
+    h += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
+    free.forEach(a => {
+      h += `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--bg2);border:1px solid var(--bd)">
+        ${a.icon} ${esc(a.name||'?')} <span style="color:var(--tx3)">${a.power.toLocaleString()}</span>
+      </span>`;
+    });
+    h += `</div>`;
+  }
+
+  h += `<div style="margin-top:12px;font-size:11px;font-weight:600;color:var(--tx2)">Copy-paste</div>`;
+  h += `<div class="cbox">${buildSummary()}</div>`;
+  document.getElementById('tabContent').innerHTML = h;
+}
+
+function buildSummary() {
+  if (!atkPlan) return '(no plan)';
+  const sc = getScore();
+  const lines = [`Attack Plan — est. ${sc.total} pts (${sc.wins}×${fightPts} + ${sc.bonus} bonus)`, ''];
+  BLDGS.forEach(b => {
+    const p = atkPlan[b.id];
+    if (!p || p.locked) return;
+    const defs = enmDef[b.id].filter(s => s.power>0||s.name.trim());
+    if (!defs.length) return;
+    lines.push(`${b.name} (${b.ru})${p.captured ? ' 🏴 CAPTURED' : ''}`);
+    defs.forEach((def, row) => {
+      const slot = p.slots.find(s => s.defIdx===row);
+      const atk  = slot?.sid ? slotInfo(slot.sid) : null;
+      const res  = slot?.result==='win' ? 'WIN' : '---';
+      const aStr = atk ? `${atk.playerName||'?'} (${atk.power.toLocaleString()})` : 'nobody';
+      lines.push(`  ${row+1}. ${aStr} vs ${def.name||'?'} (${def.power.toLocaleString()}) → ${res}`);
+    });
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT / IMPORT / RESET
+// ═══════════════════════════════════════════════
+function doExport() {
+  const data = {v:4, roster, ourDef, enmDef, ghostBridge, fightPts, nextId};
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data,null,2));
+  a.download = 'gw_' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function doImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = function(ev) {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (d.roster) roster = d.roster;
+      if (d.nextId) nextId = d.nextId;
+      if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
+      if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
+      if (d.fightPts) {
+        fightPts = d.fightPts;
+        document.getElementById('fptInp').value = fightPts;
+      }
+      atkPlan = null;
+      renderAll();
+      alert('✓ Loaded!');
+    } catch(err) { alert('Error: ' + err.message); }
+  };
+  r.readAsText(file); e.target.value = '';
+}
+function resetWar() {
+  if (!confirm('Clear defense and attack plan? Roster is kept.')) return;
+  BLDGS.forEach(b => {
+    ourDef[b.id] = Array(b.slots).fill(null);
+    enmDef[b.id] = Array.from({length:b.slots}, ()=>({name:'',power:0}));
+  });
+  atkPlan = null;
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════
+// LOCALSTORAGE
+// ═══════════════════════════════════════════════
+const LS = 'gwp_v4';
+function saveLS() {
+  try { localStorage.setItem(LS, JSON.stringify({v:4,roster,ourDef,enmDef,ghostBridge,fightPts,nextId})); } catch(e) {}
+}
+function loadLS() {
+  try {
+    const raw = localStorage.getItem(LS); if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (d.roster) roster = d.roster;
+    if (d.nextId) nextId = d.nextId;
+    if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
+    if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
+    if (d.fightPts) {
+      fightPts = d.fightPts;
+      const el = document.getElementById('fptInp'); if (el) el.value = fightPts;
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+function renderAll() { renderScore(); renderRoster(); renderTab(activeTab); saveLS(); }
+
+const _ok = loadLS();
+renderAll();
+if (_ok) {
+  const ind = document.createElement('div');
+  ind.style.cssText = 'position:fixed;bottom:12px;right:12px;background:var(--winbg);color:var(--win);font-size:10px;padding:4px 8px;border-radius:6px;border:1px solid var(--win);z-index:99;pointer-events:none';
+  ind.textContent = '✓ Data restored';
+  document.body.appendChild(ind);
+  setTimeout(() => ind.remove(), 2500);
+}
+</script>
+</body>
+</html>
