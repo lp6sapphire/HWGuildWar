@@ -96,7 +96,18 @@ let _enemyCollapsed=false;
 function zf(el){if(el.value==='0')el.value='';}
 function zb(el){if(el.value==='')el.value='0';}
 function sortOur(){ourData.sort((a,b)=>b.total-a.total);}
-function clearOurPower(){ourData.forEach(p=>{p.atk=0;p.def=0;p.total=0;});_calcDone=false;renderOur();saveLS();}
+function clearOurPower(){
+  ourData.forEach(p=>{p.atk=0;p.def=0;p.total=0;});
+  _calcDone=false;_enemyCollapsed=false;
+  // Expand our team section so user sees reset
+  const sec=document.getElementById('ourSec');
+  if(sec&&sec.style.display==='none'){
+    sec.style.display='';
+    const hdr=sec.previousElementSibling;
+    if(hdr){const a=hdr.querySelector('.collapse-arrow');if(a)a.style.transform='';}
+  }
+  renderOur();saveLS();
+}
 function toggleSection(id,header){
   const el=document.getElementById(id);if(!el)return;
   const hidden=el.style.display==='none';
@@ -1083,7 +1094,7 @@ function doImport(e){
   reader.onload=function(ev){
     try{
       const d=JSON.parse(ev.target.result);
-      if(d.ourData){ourData=d.ourData;renderOur();}
+      if(d.ourData){ourData=d.ourData;_calcDone=false;_enemyCollapsed=false;renderOur();}
       if(d.rounds)d.rounds.forEach((r,i)=>{if(i<NR){Object.assign(rounds[i],{
         mode:r.mode||"detailed",
         enemy:r.enemy||[[],[],[]],
@@ -1092,7 +1103,11 @@ function doImport(e){
         eA:r.eA||["","",""],eD:r.eD||["","",""],
         result:null,resultIns:null,viewMode:"normal"
       });}});
-      saveLS();renderRTabs();renderRC();alert("Loaded!");
+      saveLS();renderRTabs();renderRC();
+      // Expand sections after import
+      const sec=document.getElementById('ourSec');
+      if(sec){sec.style.display='';const hdr=sec.previousElementSibling;if(hdr){const a=hdr.querySelector('.collapse-arrow');if(a)a.style.transform='';}}
+      alert("Loaded!");
     }catch(err){alert("Error: "+err.message);}
   };
   reader.readAsText(file);e.target.value="";
