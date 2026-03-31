@@ -320,8 +320,10 @@ function calcAtk(mode, preSpent, preClosed){
 
   // Phase 1: Capture plan
   const bids=BLDGS.map(b=>b.id);
-  function isT2U(cs){return cs.has('bridge')||GHOST_REQ.every(id=>cs.has(id))}
-  function isCitU(cs){return CIT_UNLOCK.some(id=>cs.has(id))}
+  // Check if building is already fully captured (all slots closed)
+  function alreadyCaptured(bid){const allD=enmDef[bid].filter(s=>s.power>0);return allD.length>0&&allD.every((s,i)=>closedSet.has(bid+':'+i))}
+  function isT2U(cs){return cs.has('bridge')||alreadyCaptured('bridge')||GHOST_REQ.every(id=>cs.has(id)||alreadyCaptured(id))}
+  function isCitU(cs){return CIT_UNLOCK.some(id=>cs.has(id)||alreadyCaptured(id))}
   function isValid(cs){
     for(const id of cs){const b=BLDGS.find(x=>x.id===id);
       if(b.tier===2&&!isT2U(cs))return false;if(b.tier===3&&!isCitU(cs))return false}
