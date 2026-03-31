@@ -308,7 +308,7 @@ function calcAtk(mode, preSpent, preClosed){
     if(pow>defPow){
       const rel=pow>=defPow*(1+margin/100);
       if(mode==='safe'&&!rel) return null;
-      return{gamble:false,pow,result:rel?'win':'risky'};
+      return{pow,result:rel?'win':'risky'};
     }
     return null;
   }
@@ -379,7 +379,7 @@ function calcAtk(mode, preSpent, preClosed){
   const PAC={};roster.forEach(p=>PAC[p.id]=preSpent?.[p.id]||0);
   const assigned=new Set();
   function assignSlot(slot,p,beat){PAC[p.id]++;
-    const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,result:beat.result,gamble:beat.gamble,myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
+    const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,result:beat.result,myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
     plan[slot.bid].slots.push(a);pp[p.id].push({bid:slot.bid,si:slot.defIdx,...a});assigned.add(slot.bid+':'+slot.defIdx)}
   function checkCaps(){BLDGS.forEach(b=>{if(plan[b.id].locked)return;const allD=enmDef[b.id].filter(s=>s.power>0);
     if(!allD.length){plan[b.id].captured=true;plan[b.id].bonus=b.bonus;return}
@@ -458,8 +458,8 @@ function calcAtk(mode, preSpent, preClosed){
       const newMax=Math.max(s2.defPow>0?(a.pow/s2.defPow-1):0, s1.defPow>0?(b2on1.pow/s1.defPow-1):0);
       // Accept: 1) fewer risks 2) same risk + more same-bldg 3) same risk + same SB + lower max margin
       if(newRisk<oldRisk||(newRisk===oldRisk&&newSB>oldSB)||(newRisk===oldRisk&&newSB===oldSB&&newMax<oldMax-0.05)){
-        s1.pid=p2.id;s1.result=b2on1.result;s1.gamble=b2on1.gamble;s1.myPow=b2on1.pow;s1.e5=p2.e5!==false;
-        s2.pid=p1.id;s2.result=a.result;s2.gamble=a.gamble;s2.myPow=a.pow;s2.e5=p1.e5!==false;
+        s1.pid=p2.id;s1.result=b2on1.result;s1.myPow=b2on1.pow;s1.e5=p2.e5!==false;
+        s2.pid=p1.id;s2.result=a.result;s2.myPow=a.pow;s2.e5=p1.e5!==false;
         roster.forEach(r=>pp[r.id]=[]);
         BLDGS.forEach(bb=>{plan[bb.id].slots.filter(s=>s.pid).forEach(s=>{pp[s.pid].push({bid:bb.id,si:s.defIdx,...s})})});
         imp=true;
@@ -469,17 +469,17 @@ function calcAtk(mode, preSpent, preClosed){
   }
   checkCaps();
   let score=0;BLDGS.forEach(b=>{if(plan[b.id].locked)return;
-    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length*CFG.fightPts;
+    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky').length*CFG.fightPts;
     if(plan[b.id].captured)score+=b.bonus});
   return{plan,pp,score};
 }
 
 // ═══ SCORE + RUN ═══
-function getScore(plan){if(!plan)return{wins:0,risky:0,gambles:0,bonus:0,total:0,caps:0,totalWins:0};
-  let wins=0,risky=0,gambles=0,bonus=0,caps=0;BLDGS.forEach(b=>{const p=plan[b.id];if(!p||p.locked)return;
+function getScore(plan){if(!plan)return{wins:0,risky:0,bonus:0,total:0,caps:0,totalWins:0};
+  let wins=0,risky=0,bonus=0,caps=0;BLDGS.forEach(b=>{const p=plan[b.id];if(!p||p.locked)return;
     wins+=p.slots.filter(s=>s.result==='win').length;risky+=p.slots.filter(s=>s.result==='risky').length;
-    gambles+=p.slots.filter(s=>s.result==='gamble').length;if(p.captured){bonus+=p.bonus;caps++}});
-  const tw=wins+risky+gambles;return{wins,risky,gambles,totalWins:tw,bonus,total:tw*CFG.fightPts+bonus,caps}}
+    if(p.captured){bonus+=p.bonus;caps++}});
+  const tw=wins+risky;return{wins,risky,totalWins:tw,bonus,total:tw*CFG.fightPts+bonus,caps}}
 function runCalc(){
   try{
     spentAttempts={};closedSlots=new Set();
@@ -504,7 +504,7 @@ function recalc(){
 function renderScore(){
   const r=result?result[activePlan]:null;const sc=getScore(r?.plan);
   const fact=getFactPts();
-  const w=sc.risky+sc.gambles;const wH=w>0?` <span style="color:var(--warn)">(+${w}⚠)</span>`:'';
+  const w=sc.risky;const wH=w>0?` <span style="color:var(--warn)">(+${w}⚠)</span>`:'';
   const factH=fact.closed>0?`<div class="sm sdiv"><small>Fact</small><b style="color:var(--acc)">${fact.pts}</b></div>`:'';
   document.getElementById('scoreBar').innerHTML=
     `<div class="sm"><small>Plan</small><b style="color:var(--win)">${sc.total}</b></div>
@@ -614,7 +614,7 @@ function renderResults(){
   let h='';
 
   // Plan toggle
-  const mR=scM.risky+scM.gambles,sR=scS.risky+scS.gambles;
+  const mR=scM.risky,sR=scS.risky;
   h+=`<div style="display:flex;gap:3px;margin-bottom:6px;align-items:center">
     <button class="btn btn-sm${activePlan==='max'?' btn-p':''}" onclick="setPlan('max')">🗡${scM.total}${mR?' ('+mR+'⚠)':''}</button>
     <button class="btn btn-sm${activePlan==='safe'?' btn-p':''}" onclick="setPlan('safe')">🛡${scS.total}</button>
@@ -674,7 +674,7 @@ function renderResults(){
       const cap=p?.captured,planLocked=p?.locked;
       const realLocked=!isAccessible(b); // actual game state
       const locked=planLocked||realLocked;
-      const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length||0;
+      const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky').length||0;
       const cC=p?.slots.filter(s=>s.result==='closed').length||0;const allD=enmDef[b.id].filter(s=>s.power>0);const tot=allD.length;
       const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
       let cc='card';if(!locked){if(cap)cc+=' cap';else if(wC+cC>0&&wC+cC<tot)cc+=' part';else if(tot>0&&!wC&&!cC)cc+=' fail'}
