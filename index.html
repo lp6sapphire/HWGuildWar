@@ -401,10 +401,14 @@ function calcAtk(mode, preSpent, preClosed){
   function assignRound(slots,sortFn,filterFn){
     for(let iter=0;iter<slots.length*2;iter++){
       slots.forEach(s=>{if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
-        s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&(filterFn?filterFn(p):true)&&canBeat(p,s.effPow,s.tt)).length});
-      let bs=null,bc=Infinity;
+        s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&(filterFn?filterFn(p):true)&&canBeat(p,s.effPow,s.tt)).length;
+        // How many open slots remain in this building? Fewer = closer to capture = higher priority
+        s._remain=openSlots[s.bid]?openSlots[s.bid].filter(x=>!assigned.has(x.bid+':'+x.defIdx)).length:99});
+      let bs=null,bc=Infinity,br=99;
       for(const s of slots){if(assigned.has(s.bid+':'+s.defIdx))continue;
-        if(s.cands>0&&(s.cands<bc||(s.cands===bc&&bs&&s.effPow>bs.effPow))){bc=s.cands;bs=s}}
+        if(s.cands<=0)continue;
+        // Priority: 1) fewer remaining open slots in building, 2) fewer candidates (scarcity), 3) higher effPow
+        if(s._remain<br||(s._remain===br&&s.cands<bc)||(s._remain===br&&s.cands===bc&&bs&&s.effPow>bs.effPow)){bc=s.cands;bs=s;br=s._remain}}
       if(!bs)break;
       const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&(filterFn?filterFn(p):true)&&canBeat(p,bs.effPow,bs.tt))
         .map(p=>{const beat=canBeat(p,bs.effPow,bs.tt);
