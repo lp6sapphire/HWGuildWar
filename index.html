@@ -5,1184 +5,622 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Guild War Planner</title>
 <style>
-:root{
-  --bg:#1a1a1a;--bg2:#252525;--bg3:#2f2f2f;--tx:#e0e0e0;--tx2:#aaa;--tx3:#666;
+:root{--bg:#1a1a1a;--bg2:#252525;--bg3:#2f2f2f;--tx:#e0e0e0;--tx2:#aaa;--tx3:#666;
   --bd:#3a3a3a;--win:#2ecc71;--winbg:rgba(46,204,113,.12);
   --lose:#e74c3c;--losebg:rgba(231,76,60,.1);
   --warn:#f39c12;--warnbg:rgba(243,156,18,.12);
-  --acc:#3498db;--accbg:rgba(52,152,219,.12);
-  --mono:'JetBrains Mono',Consolas,monospace
-}
+  --acc:#3498db;--accbg:rgba(52,152,219,.12);--mono:'JetBrains Mono',Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;color:var(--tx);background:var(--bg);
-  padding:10px 14px;max-width:1250px;margin:0 auto;font-size:13px;line-height:1.5}
-.btn{padding:5px 12px;font-size:11px;border:1px solid var(--bd);border-radius:5px;
-  cursor:pointer;background:var(--bg2);color:var(--tx);font-family:inherit;transition:background .15s}
+  padding:10px 14px;max-width:1250px;margin:0 auto;font-size:13px;line-height:1.4}
+.btn{padding:4px 10px;font-size:11px;border:1px solid var(--bd);border-radius:5px;
+  cursor:pointer;background:var(--bg2);color:var(--tx);font-family:inherit}
 .btn:hover{background:var(--bg3)}.btn:disabled{opacity:.3;cursor:not-allowed}
 .btn-p{background:var(--win)!important;color:#000!important;border-color:var(--win)!important;font-weight:600}
-.btn-p:hover{opacity:.85}.btn-p:disabled{opacity:.3}
-.btn-d{color:var(--lose);border-color:rgba(231,76,60,.4)}.btn-d:hover{background:var(--losebg)}
-.btn-sm{padding:2px 8px;font-size:10px}
-input,select{font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;
+.btn-d{color:var(--lose);border-color:rgba(231,76,60,.4)}
+.btn-sm{padding:2px 7px;font-size:10px}
+input,select{font-size:11px;padding:2px 5px;border:1px solid var(--bd);border-radius:4px;
   background:var(--bg);color:var(--tx);font-family:inherit;box-sizing:border-box}
-input:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 1px rgba(52,152,219,.3)}
+input:focus{outline:none;border-color:var(--acc)}
 table{width:100%;border-collapse:collapse;font-size:11px}
-th{font-size:10px;color:var(--tx3);font-weight:500;padding:4px 5px;border-bottom:1px solid var(--bd);
-  text-transform:uppercase;letter-spacing:.04em}
-td{padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
-.card{background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:6px;
-  border:1px solid transparent;transition:border-color .2s}
+th{font-size:9px;color:var(--tx3);font-weight:500;padding:2px 4px;border-bottom:1px solid var(--bd);text-transform:uppercase}
+td{padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle}
+.card{background:var(--bg2);border-radius:6px;padding:8px;margin-bottom:5px;border:1px solid transparent}
 .card.cap{border-color:var(--win)}.card.fail{border-color:var(--lose)}.card.part{border-color:var(--warn)}
-.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;
-  background:var(--winbg);color:var(--win);font-weight:600}
 .sbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--bd);
-  padding:8px 0;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.sm{text-align:center;min-width:60px}
-.sm small{font-size:9px;color:var(--tx3);display:block;text-transform:uppercase;letter-spacing:.03em}
-.sm b{font-size:17px;font-weight:600}
-.sdiv{border-left:1px solid var(--bd);padding-left:10px}
-.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:10px;gap:2px;align-items:center}
-.tab{padding:7px 16px;font-size:12px;cursor:pointer;border:none;background:none;
-  color:var(--tx3);border-bottom:2px solid transparent;font-family:inherit;transition:all .15s}
+  padding:8px 0;margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sm{text-align:center;min-width:55px}.sm small{font-size:10px;color:var(--tx3);display:block}.sm b{font-size:17px;font-weight:700}
+.sdiv{border-left:1px solid var(--bd);padding-left:8px}
+.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:8px;gap:2px;align-items:center}
+.tab{padding:6px 14px;font-size:13px;cursor:pointer;border:none;background:none;
+  color:var(--tx3);border-bottom:2px solid transparent;font-family:inherit}
 .tab:hover{color:var(--tx2)}.tab.on{color:var(--tx);font-weight:600;border-bottom-color:var(--win)}
-.bgrid{display:grid;gap:6px}
-.bgrid-t1{grid-template-columns:repeat(4,1fr)}
-.bgrid-t2{grid-template-columns:repeat(5,1fr)}
-.bgrid-t3{grid-template-columns:1fr}
-.pill{display:inline-block;padding:0 6px;border-radius:10px;font-size:10px;line-height:1.8;font-weight:600}
-.pw{background:var(--winbg);color:var(--win)}
-.pl{background:var(--losebg);color:var(--lose)}
-.pw2{background:var(--warnbg);color:var(--warn)}
+.bgrid{display:grid;gap:5px}
+.bgrid-t1{grid-template-columns:repeat(4,1fr)}.bgrid-t2{grid-template-columns:repeat(2,1fr)}.bgrid-t3{grid-template-columns:1fr;max-width:350px}
 .num{text-align:right;width:100%}
-.cbox{font-family:var(--mono);font-size:10px;padding:8px;background:var(--bg2);
-  border-radius:6px;margin-top:8px;white-space:pre-wrap;user-select:all;line-height:1.6;
-  border:1px solid var(--bd)}
-.tlbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;
-  font-weight:600;margin:12px 0 5px}
-.set-panel{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;
-  margin-bottom:10px;display:none}
+.cbox{font-family:var(--mono);font-size:10px;padding:6px;background:var(--bg2);border-radius:5px;margin-top:6px;white-space:pre-wrap;user-select:all;line-height:1.5;border:1px solid var(--bd)}
+.tlbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin:10px 0 4px}
+.section{background:var(--bg2);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:8px}
+.section-hdr{font-size:12px;color:var(--tx2);font-weight:600;cursor:pointer;user-select:none;padding:4px 0;display:flex;align-items:center;gap:6px}
+.set-panel{background:var(--bg2);border:1px solid var(--bd);border-radius:6px;padding:8px 12px;margin-bottom:8px;display:none}
 .set-panel.open{display:block}
-.set-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-.set-row:last-child{margin-bottom:0}
-.set-row label{font-size:11px;color:var(--tx2);min-width:120px}
-.set-row input[type=number]{width:52px;text-align:center}
-.plan-toggle{display:flex;gap:4px;margin-bottom:8px}
-.plan-toggle .btn{flex:1;text-align:center}
-.plan-toggle .btn.active{background:var(--acc)!important;color:#fff!important;border-color:var(--acc)!important}
-.spent-btn{font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid var(--bd);
-  background:var(--bg);color:var(--tx3);cursor:pointer;font-family:inherit;transition:all .15s}
+.set-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;font-size:11px}
+.set-row label{color:var(--tx2);min-width:110px}
+.set-row input[type=number]{width:48px;text-align:center}
+.ne5{color:var(--warn);font-size:9px;font-weight:600}
+.tsep{border-right:1px solid var(--bd);padding-right:8px}
+.inc-btn{font-size:9px;padding:0 4px;line-height:1.5;border:1px solid var(--bd);border-radius:3px;
+  background:var(--bg);color:var(--tx3);cursor:pointer;font-family:inherit;user-select:none}
+.inc-btn:hover{color:var(--win);border-color:var(--win)}
+.inc-btn:active{background:var(--winbg)}
+.spent-btn{font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid var(--bd);
+  background:var(--bg);color:var(--tx3);cursor:pointer;font-family:inherit}
 .spent-btn.on{border-color:var(--acc);background:var(--accbg);color:var(--acc);font-weight:600}
+.collapsible{cursor:pointer;user-select:none}
 #fileInput{display:none}
-@media(max-width:900px){.bgrid-t1{grid-template-columns:repeat(2,1fr)}.bgrid-t2{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.bgrid-t1{grid-template-columns:repeat(2,1fr)}.bgrid-t2{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.bgrid-t1,.bgrid-t2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-  <b style="font-size:16px">⚔️ Guild War Planner</b>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+  <b style="font-size:15px">⚔️ GW Planner</b>
   <span style="flex:1"></span>
-  <button class="btn btn-sm" onclick="toggleSettings()">⚙️ Settings</button>
-  <button class="btn btn-sm" onclick="doExport()">💾 Export</button>
-  <button class="btn btn-sm" onclick="document.getElementById('fileInput').click()">📂 Import</button>
-  <button class="btn btn-d btn-sm" onclick="resetWar()">🗑 Reset</button>
+  <button class="btn btn-sm" onclick="toggleSettings()">⚙️</button>
+  <button class="btn btn-sm" onclick="doExport()">💾</button>
+  <button class="btn btn-sm" onclick="document.getElementById('fileInput').click()">📂</button>
+  <button class="btn btn-d btn-sm" onclick="resetWar()">🗑</button>
   <input type="file" id="fileInput" accept=".json" onchange="doImport(event)">
 </div>
 
 <div class="set-panel" id="settingsPanel">
-  <div class="set-row">
-    <label>Points per win:</label>
-    <input type="number" id="fptInp" value="20" min="1" max="999"
-      onchange="CFG.fightPts=parseInt(this.value)||20;saveLS()">
-    <span style="font-size:10px;color:var(--tx3)">Gold=20</span>
-  </div>
-  <div class="set-row">
-    <label>⚡ E5 titan boost:</label>
-    <input type="number" id="boostInp" value="10" min="0" max="50"
-      onchange="CFG.titanBoost=parseInt(this.value)||0;saveLS()">%
-  </div>
-  <div class="set-row">
-    <label>⚡ Non-E5 penalty:</label>
-    <input type="number" id="penaltyInp" value="10" min="0" max="50"
-      onchange="CFG.titanPenalty=parseInt(this.value)||0;saveLS()">%
-  </div>
-  <div class="set-row">
-    <label>⚔️ Hero win margin:</label>
-    <input type="number" id="hMarginInp" value="20" min="0" max="50"
-      onchange="CFG.heroMargin=parseInt(this.value)||0;saveLS()">%
-    <span style="font-size:10px;color:var(--tx3)">Heroes are unpredictable</span>
-  </div>
-  <div class="set-row">
-    <label>⚡ Titan win margin:</label>
-    <input type="number" id="tMarginInp" value="5" min="0" max="50"
-      onchange="CFG.titanMargin=parseInt(this.value)||0;saveLS()">%
-    <span style="font-size:10px;color:var(--tx3)">Titans are predictable</span>
-  </div>
-  <div class="set-row">
-    <label>👻 Ghost Bridge insurance:</label>
-    <input type="checkbox" id="ghostInsInp" checked
-      onchange="CFG.ghostInsurance=this.checked;saveLS()">
-    <span style="font-size:10px;color:var(--tx3)">ON = Barracks+Lighthouse+Mage обязательны для capture (страховка если Bridge risky)</span>
-  </div>
+  <div class="set-row"><label>Pts per win:</label><input type="number" id="fptInp" value="0" min="0" max="999" onchange="CFG.fightPts=parseInt(this.value)||0;saveLS()"></div>
+  <div class="set-row"><label>⚡ E5 boost:</label><input type="number" id="boostInp" value="0" min="0" max="50" onchange="CFG.titanBoost=parseInt(this.value)||0;saveLS()">%</div>
+  <div class="set-row"><label>⚡ Non-E5 penalty:</label><input type="number" id="penaltyInp" value="0" min="0" max="50" onchange="CFG.titanPenalty=parseInt(this.value)||0;saveLS()">%</div>
+  <div class="set-row"><label>⚔️ Hero margin:</label><input type="number" id="hMarginInp" value="0" min="0" max="50" onchange="CFG.heroMargin=parseInt(this.value)||0;saveLS()">%</div>
+  <div class="set-row"><label>⚡ Titan margin:</label><input type="number" id="tMarginInp" value="0" min="0" max="50" onchange="CFG.titanMargin=parseInt(this.value)||0;saveLS()">%</div>
 </div>
 
 <div class="sbar" id="scoreBar"></div>
 
-<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;cursor:pointer" onclick="toggleRoster()">
-  <span id="rosterArrow" style="font-size:10px;color:var(--tx3);transition:transform .2s">▶</span>
-  <b style="font-size:14px">Roster</b>
-  <span id="rosterCount" style="font-size:11px;color:var(--tx3)"></span>
-  <span style="flex:1"></span>
-  <span onclick="event.stopPropagation()" style="display:flex;gap:4px;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="addPlayer()" id="addBtn">+ Player</button>
+<div class="collapsible" style="display:flex;align-items:center;gap:4px;margin-bottom:4px" onclick="toggleRoster()">
+  <span id="rosterArrow" style="font-size:9px;color:var(--tx3)">▶</span>
+  <b style="font-size:13px">Roster</b>
+  <span id="rosterCount" style="font-size:10px;color:var(--tx3)"></span>
+  <span onclick="event.stopPropagation()" style="display:flex;gap:3px;margin-left:8px">
+    <button class="btn btn-sm" onclick="addPlayer()" id="addBtn">+</button>
     <button class="btn btn-sm" onclick="sortRoster('max');renderAll()">↕</button>
-    <button class="btn btn-sm" onclick="sortRoster('h');renderAll()">↕⚔️</button>
-    <button class="btn btn-sm" onclick="sortRoster('t');renderAll()">↕⚡</button>
+    <button class="btn btn-sm" onclick="sortRoster('h');renderAll()">⚔</button>
+    <button class="btn btn-sm" onclick="sortRoster('t');renderAll()">⚡</button>
     <button class="btn btn-d btn-sm" onclick="clearPowers()">🗑</button>
   </span>
 </div>
-<div id="rosterWrap" style="margin-bottom:8px;display:none"></div>
+<div id="rosterWrap" style="margin-bottom:6px;display:none"></div>
 
 <div class="tabs">
-  <button class="tab on" id="tab0" onclick="setTab(0)">🛡 Defense</button>
-  <button id="defBtn" class="btn btn-p btn-sm" style="margin:2px 4px;padding:3px 10px" onclick="autoDefense()">🛡 Auto</button>
-  <button class="tab"    id="tab1" onclick="setTab(1)">🗡 Enemy</button>
-  <button class="tab"    id="tab2" onclick="setTab(2)">📊 Attack</button>
-  <button id="atkBtn" class="btn btn-p btn-sm" style="margin:2px 4px;padding:3px 10px" onclick="runCalc()">⚔️ Calculate</button>
+  <button class="tab on" id="tab0" onclick="setTab(0)">🗡 Enemy</button>
+  <button class="tab" id="tab1" onclick="setTab(1)">🛡 Defense</button>
+  <button id="defBtn" class="btn btn-p" style="margin:2px 4px;padding:4px 12px;font-size:12px" onclick="autoDefense()">🛡 Auto</button>
+  <button class="tab" id="tab2" onclick="setTab(2)">📊 Attack</button>
+  <button id="atkBtn" class="btn btn-p" style="margin:2px 4px;padding:4px 12px;font-size:12px" onclick="runCalc()">⚔️ Calc</button>
+  <label style="font-size:11px;color:var(--tx2);display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:12px">
+    <input type="checkbox" id="ghostInsInp" onchange="CFG.ghostInsurance=this.checked;saveLS()">👻 Ghost Bridge
+  </label>
 </div>
 <div id="tabContent"></div>
 
 <script>
-// ═══════════════════════════════════════════════
-// CONSTANTS & CONFIG
-// ═══════════════════════════════════════════════
-const BLDGS = [
-  {id:'bridge',    name:'Bridge',          ru:'Мост',          tier:1, slots:4, type:'titans', bonus:60},
-  {id:'barracks',  name:'Barracks',        ru:'Казармы',       tier:1, slots:3, type:'heroes', bonus:40},
-  {id:'lighthouse',name:'Lighthouse',      ru:'Маяк',          tier:1, slots:3, type:'heroes', bonus:40},
-  {id:'mage',      name:'Mage Academy',    ru:'Акад. Магов',   tier:1, slots:3, type:'heroes', bonus:40},
-  {id:'foundry',   name:'Foundry',         ru:'Литейная',      tier:2, slots:4, type:'heroes', bonus:60},
-  {id:'fire',      name:'Bastion of Fire', ru:'Бастион Огня',  tier:2, slots:4, type:'titans', bonus:60},
-  {id:'nature',    name:'Gates of Nature', ru:'Врата Природы',  tier:2, slots:4, type:'titans', bonus:60},
-  {id:'ice',       name:'Bastion of Ice',  ru:'Бастион Льда',  tier:2, slots:4, type:'titans', bonus:60},
-  {id:'spring',    name:'Spring of Elem.', ru:'Ист. Стихий',   tier:2, slots:4, type:'titans', bonus:60},
-  {id:'citadel',   name:'Citadel',         ru:'Цитадель',      tier:3, slots:7, type:'heroes', bonus:120},
+const BLDGS=[
+  {id:'bridge',name:'Bridge',ru:'Мост',tier:1,slots:4,type:'titans',bonus:60},
+  {id:'barracks',name:'Barracks',ru:'Казармы',tier:1,slots:3,type:'heroes',bonus:40},
+  {id:'lighthouse',name:'Lighthouse',ru:'Маяк',tier:1,slots:3,type:'heroes',bonus:40},
+  {id:'mage',name:'Mage Academy',ru:'Акад. Магов',tier:1,slots:3,type:'heroes',bonus:40},
+  {id:'foundry',name:'Foundry',ru:'Литейная',tier:2,slots:4,type:'heroes',bonus:60},
+  {id:'fire',name:'Bastion of Fire',ru:'Бастион Огня',tier:2,slots:4,type:'titans',bonus:60},
+  {id:'nature',name:'Gates of Nature',ru:'Врата Природы',tier:2,slots:4,type:'titans',bonus:60},
+  {id:'ice',name:'Bastion of Ice',ru:'Бастион Льда',tier:2,slots:4,type:'titans',bonus:60},
+  {id:'spring',name:'Spring of Elem.',ru:'Ист. Стихий',tier:2,slots:4,type:'titans',bonus:60},
+  {id:'citadel',name:'Citadel',ru:'Цитадель',tier:3,slots:7,type:'heroes',bonus:120},
 ];
-const CIT_UNLOCK = ['fire','nature','ice'];
-const GHOST_REQ  = ['barracks','lighthouse','mage'];
-const DEF_ORDER  = [...BLDGS].sort((a,b) => b.bonus-a.bonus || a.tier-b.tier);
-const MAX_P = 20, MAX_ATK = 2;
+const CIT_UNLOCK=['fire','nature','ice'],GHOST_REQ=['barracks','lighthouse','mage'];
+const DEF_ORDER=[...BLDGS].sort((a,b)=>b.bonus-a.bonus||a.tier-b.tier);
+const MAX_P=20,MAX_ATK=2;
 
-// Settings — not saved in export, only localStorage
-const CFG = {fightPts:20, titanBoost:10, titanPenalty:10, heroMargin:20, titanMargin:5, ghostInsurance:true};
+// Settings: defaults 0, saved in export+LS
+const CFG={fightPts:0,titanBoost:0,titanPenalty:0,heroMargin:0,titanMargin:0,ghostInsurance:false};
 
-// ═══════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════
-let roster=[], ourDef={}, enmDef={};
-let result=null; // {max:{plan,pp,score}, safe:{plan,pp,score}}
-let spentAttempts={}, closedSlots=new Set();
-let nextId=1, activeTab=0, activePlan='max';
-let defChanges={};
+let roster=[],ourDef={},enmDef={};
+let result=null; // {max,safe}
+let spentAttempts={},closedSlots=new Set();
+let nextId=1,activeTab=0,activePlan='max',defChanges={};
+let rosterOpen=false;
 
 BLDGS.forEach(b=>{
   ourDef[b.id]=Array(b.slots).fill(null);
-  enmDef[b.id]=Array.from({length:b.slots},()=>({power:0, e5:true}));
+  enmDef[b.id]=Array.from({length:b.slots},()=>({power:0,e5:true}));
 });
 
-// ═══════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════
+// ═══ HELPERS ═══
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+// Hold-to-increment
+let _hTimer=null,_hInterval=null;
+function incStart(i,f,dir){
+  incOnce(i,f,dir);
+  _hTimer=setTimeout(()=>{_hInterval=setInterval(()=>incOnce(i,f,dir),80)},400);
+}
+function incStop(){clearTimeout(_hTimer);clearInterval(_hInterval);_hTimer=null;_hInterval=null;saveLS()}
+function incOnce(i,f,dir){
+  roster[i][f]=Math.max(0,(roster[i][f]||0)+dir);
+  const sfx=f==='hPow'?'h':'t';
+  const el=document.getElementById(`rp_${i}_${sfx}`);
+  if(el)el.value=roster[i][f];
+}
+// Subtle gradient: red(0%) → amber(15%) → green(30%+) — background only
+function marginBg(pct){
+  if(pct>=50) return'rgba(46,204,113,.12)';
+  if(pct>=30) return'rgba(46,204,113,.08)';
+  if(pct>=20) return'rgba(46,204,113,.05)';
+  if(pct>=10) return'rgba(243,156,18,.07)';
+  if(pct>=5)  return'rgba(243,156,18,.12)';
+  return'rgba(231,76,60,.10)';
+}
+function marginCol(pct){
+  if(pct>=30) return'var(--win)';
+  if(pct>=15) return'#8bc34a';
+  if(pct>=5)  return'var(--warn)';
+  return'var(--lose)';
+}
 function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('open')}
-
-let rosterOpen=false;
-function toggleRoster(){
-  rosterOpen=!rosterOpen;
-  document.getElementById('rosterWrap').style.display=rosterOpen?'block':'none';
-  document.getElementById('rosterArrow').style.transform=rosterOpen?'rotate(90deg)':'';
-}
-
-function slotInfo(sid){
-  if(!sid)return null;
-  const[t,idS]=sid.split('_');const id=parseInt(idS);const p=roster.find(r=>r.id===id);
-  if(!p)return null;
-  return{sid,name:p.name,power:t==='h'?p.hPow:p.tPow,type:t==='h'?'heroes':'titans'};
-}
+function toggleRoster(){rosterOpen=!rosterOpen;document.getElementById('rosterWrap').style.display=rosterOpen?'block':'none';document.getElementById('rosterArrow').style.transform=rosterOpen?'rotate(90deg)':''}
+function slotInfo(sid){if(!sid)return null;const[t,idS]=sid.split('_');const id=parseInt(idS);const p=roster.find(r=>r.id===id);if(!p)return null;return{sid,name:p.name,power:t==='h'?p.hPow:p.tPow,type:t==='h'?'heroes':'titans'}}
 function heroSlots(){return roster.filter(r=>r.hPow>0).sort((a,b)=>b.hPow-a.hPow).map(r=>'h_'+r.id)}
 function titanSlots(){return roster.filter(r=>r.tPow>0).sort((a,b)=>b.tPow-a.tPow).map(r=>'t_'+r.id)}
 function defSet(){const s=new Set();BLDGS.forEach(b=>ourDef[b.id].forEach(d=>{if(d)s.add(d)}));return s}
+function setOurDef(bid,si,v){const old=ourDef[bid][si];defChanges={};if(old&&old!==v)defChanges[old]='freed';if(v)defChanges[v]='assigned';ourDef[bid][si]=v||null;saveLS();renderAll();setTimeout(()=>{defChanges={};renderRoster()},1500)}
 
-function setOurDef(bid,si,v){
-  const old=ourDef[bid][si];defChanges={};
-  if(old&&old!==v)defChanges[old]='freed';
-  if(v)defChanges[v]='assigned';
-  ourDef[bid][si]=v||null;saveLS();renderAll();
-  setTimeout(()=>{defChanges={};renderRoster()},1500);
-}
-
-// ═══════════════════════════════════════════════
-// ROSTER OPS
-// ═══════════════════════════════════════════════
-function addPlayer(){
-  if(roster.length>=MAX_P)return;
-  roster.push({id:nextId++,name:'',hPow:0,tPow:0,e5:true,risk:false});renderAll();
-}
-function removePlayer(i){
-  const id=roster[i].id;
-  BLDGS.forEach(b=>{ourDef[b.id]=ourDef[b.id].map(d=>(d==='h_'+id||d==='t_'+id)?null:d)});
-  roster.splice(i,1);renderAll();
-}
-function sortRoster(by='max'){
-  roster.sort((a,b)=>by==='h'?b.hPow-a.hPow:by==='t'?b.tPow-a.tPow:Math.max(b.hPow,b.tPow)-Math.max(a.hPow,a.tPow));
-}
+// ═══ ROSTER ═══
+function addPlayer(){if(roster.length>=MAX_P)return;roster.push({id:nextId++,name:'',hPow:0,tPow:0,e5:true,risk:false});renderAll()}
+function removePlayer(i){const id=roster[i].id;BLDGS.forEach(b=>{ourDef[b.id]=ourDef[b.id].map(d=>(d==='h_'+id||d==='t_'+id)?null:d)});roster.splice(i,1);renderAll()}
+function sortRoster(by='max'){roster.sort((a,b)=>by==='h'?b.hPow-a.hPow:by==='t'?b.tPow-a.tPow:Math.max(b.hPow,b.tPow)-Math.max(a.hPow,a.tPow))}
 function clearPowers(){if(!confirm('Clear all powers?'))return;roster.forEach(p=>{p.hPow=0;p.tPow=0});renderAll()}
 
-// ═══════════════════════════════════════════════
-// AUTO DEFENSE — round-robin strongest first
-// ═══════════════════════════════════════════════
-function autoDefense(){
-  BLDGS.forEach(b=>{ourDef[b.id]=Array(b.slots).fill(null)});
-  const hP=heroSlots(),tP=titanSlots(),hU=new Set(),tU=new Set();
-  function fill(bldgs,pool,used){
-    const mx=Math.max(...bldgs.map(b=>b.slots));
-    for(let s=0;s<mx;s++)for(const b of bldgs){
-      if(s>=b.slots)continue;const c=pool.find(x=>!used.has(x));
-      if(!c)return;ourDef[b.id][s]=c;used.add(c);
-    }
-  }
-  fill(DEF_ORDER.filter(b=>b.type==='heroes'),hP,hU);
-  fill(DEF_ORDER.filter(b=>b.type==='titans'),tP,tU);
-  renderAll();
-}
+// ═══ AUTO DEFENSE ═══
+function autoDefense(){BLDGS.forEach(b=>{ourDef[b.id]=Array(b.slots).fill(null)});const hP=heroSlots(),tP=titanSlots(),hU=new Set(),tU=new Set();
+  function fill(bldgs,pool,used){const mx=Math.max(...bldgs.map(b=>b.slots));for(let s=0;s<mx;s++)for(const b of bldgs){if(s>=b.slots)continue;const c=pool.find(x=>!used.has(x));if(!c)return;ourDef[b.id][s]=c;used.add(c)}}
+  fill(DEF_ORDER.filter(b=>b.type==='heroes'),hP,hU);fill(DEF_ORDER.filter(b=>b.type==='titans'),tP,tU);renderAll()}
 function clearOB(id){ourDef[id]=Array(BLDGS.find(b=>b.id===id).slots).fill(null);renderAll()}
 function clearEB(id){enmDef[id]=Array.from({length:BLDGS.find(b=>b.id===id).slots},()=>({power:0,e5:true}));saveLS();renderTab(activeTab)}
 
-// ═══════════════════════════════════════════════
-// ATTACK OPTIMIZER
-//
-// Phase 0: Power helpers, build open slots
-// Phase 1: Find optimal capture plan — enumerate
-//          valid building combos, pick highest score
-// Phase 2: Scarcity-first assignment within plan
-// Phase 3: Swap optimization (reduce risks)
-//
-// Same function for initial calc and recalc.
-// Inputs: open slots (not closed) + available
-// players (MAX_ATK − spent). That's it.
-// ═══════════════════════════════════════════════
-function calcAtk(mode, preSpent, preClosed){
+// ═══ FACT PTS ═══
+function getFactPts(){
+  let pts=0,caps=0;
+  BLDGS.forEach(b=>{
+    const allD=enmDef[b.id].filter(s=>s.power>0);
+    const closedN=allD.filter((s,i)=>closedSlots.has(b.id+':'+i)).length;
+    pts+=closedN*CFG.fightPts;
+    if(allD.length>0&&closedN===allD.length){pts+=b.bonus;caps++}
+    else if(allD.length===0){caps++} // empty = auto-captured
+  });
+  return{pts,closed:[...closedSlots].length,caps};
+}
 
-  // ── Phase 0: helpers ──
-  function defEP(slot,tt){
-    const base=parseFloat(slot.power)||0;
-    if(tt!=='t'||slot.e5===false) return base;
-    return Math.round(base*(1+CFG.titanBoost/100));
-  }
-  function atkEP(p,tt,gamble){
-    if(tt==='h') return p.hPow||0;
-    const base=p.tPow||0; if(!base) return 0;
-    if(p.e5===false) return Math.round(base*(1-CFG.titanPenalty/100));
-    return gamble?Math.round(base*(1+CFG.titanBoost/100)):base;
-  }
+// ═══ ATTACK OPTIMIZER ═══
+// Phase 1: Capture plan enumeration
+// Phase 2: R1 hero(1/player,strongest) → R2 titan(weakest) → R3 hero2nd → R4 titan2nd
+// Phase 3: Swap optimization
+function calcAtk(mode, preSpent, preClosed){
+  function defEP(slot,tt){const base=parseFloat(slot.power)||0;if(tt!=='t'||slot.e5===false)return base;return Math.round(base*(1+CFG.titanBoost/100))}
+  function atkEP(p,tt,gamble){if(tt==='h')return p.hPow||0;const base=p.tPow||0;if(!base)return 0;if(p.e5===false)return Math.round(base*(1-CFG.titanPenalty/100));return gamble?Math.round(base*(1+CFG.titanBoost/100)):base}
   function canBeat(p,defPow,tt){
+    // Non-E5 titans: skip titan slots entirely (handled later as last resort)
+    if(tt==='t'&&p.e5===false&&!p._lastResort) return null;
     const margin=tt==='h'?CFG.heroMargin:CFG.titanMargin;
     const pow=atkEP(p,tt,false);
-    if(pow>defPow){
-      const rel=pow>=defPow*(1+margin/100);
-      if(mode==='safe'&&!rel){/* fall to gamble */}
-      else return{gamble:false,pow,result:rel?'win':'risky'};
-    }
-    if(tt==='t'&&p.e5!==false){
-      const gp=atkEP(p,tt,true);
-      if(gp>defPow){
-        if(mode==='safe') return null;
-        return{gamble:true,pow:gp,result:'gamble'};
-      }
-    }
+    if(pow>defPow){const rel=pow>=defPow*(1+margin/100);if(mode==='safe'&&!rel){}else return{gamble:false,pow,result:rel?'win':'risky'}}
+    if(tt==='t'&&p.e5!==false){const gp=atkEP(p,tt,true);if(gp>defPow){if(mode==='safe')return null;return{gamble:true,pow:gp,result:'gamble'}}}
     return null;
   }
+  const atkLeft={};roster.forEach(p=>atkLeft[p.id]=MAX_ATK-(preSpent?.[p.id]||0));
+  const closedSet=new Set();if(preClosed)preClosed.forEach(k=>closedSet.add(k));
+  const openSlots={};BLDGS.forEach(b=>{const tt=b.type==='titans'?'t':'h';openSlots[b.id]=[];
+    enmDef[b.id].forEach((s,i)=>{if(!s.power||closedSet.has(b.id+':'+i))return;openSlots[b.id].push({bid:b.id,defIdx:i,tt,effPow:defEP(s,tt)})})});
 
-  // Available attacks per player
-  const atkLeft={};
-  roster.forEach(p=>atkLeft[p.id]=MAX_ATK-(preSpent?.[p.id]||0));
-
-  // Closed slots
-  const closedSet=new Set();
-  if(preClosed) preClosed.forEach(k=>closedSet.add(k));
-
-  // Open enemy slots per building
-  // openSlots[bid] = [{defIdx, tt, effPow, raw}, ...]
-  const openSlots={};
-  BLDGS.forEach(b=>{
-    const tt=b.type==='titans'?'t':'h';
-    openSlots[b.id]=[];
-    enmDef[b.id].forEach((s,i)=>{
-      if(!s.power||closedSet.has(b.id+':'+i)) return;
-      openSlots[b.id].push({bid:b.id,defIdx:i,tt,effPow:defEP(s,tt),raw:s.power});
-    });
-  });
-
-  // ── Phase 1: Find optimal capture plan ──
-
-  // Generate all valid building subsets to capture.
-  // Unlock rules:
-  //   T1: always accessible
-  //   T2: need Bridge in set OR all 3 Ghost (barracks+lighthouse+mage) in set
-  //   Citadel: need ≥1 of fire/nature/ice in set
-  // "In set" means: all open slots of that building are covered
-  //   (either already closed or we plan to beat them)
-  // A building with 0 open slots = already captured (free).
-
+  // Phase 1: Capture plan
   const bids=BLDGS.map(b=>b.id);
-  const t1ids=BLDGS.filter(b=>b.tier===1).map(b=>b.id);
-  const t2ids=BLDGS.filter(b=>b.tier===2).map(b=>b.id);
-
-  function isT2Unlocked(capSet){
-    if(capSet.has('bridge')) return true;
-    return GHOST_REQ.every(id=>capSet.has(id));
-  }
-  function isCitUnlocked(capSet){
-    return CIT_UNLOCK.some(id=>capSet.has(id));
-  }
-  function isValidSet(capSet){
-    for(const id of capSet){
-      const b=BLDGS.find(x=>x.id===id);
-      if(b.tier===2&&!isT2Unlocked(capSet)) return false;
-      if(b.tier===3&&!isCitUnlocked(capSet)) return false;
-    }
-    // Ghost Bridge insurance: if ON and we plan to capture any T2/T3,
-    // Ghost Bridge buildings (Barracks+Lighthouse+Mage) must ALL be in capture set.
-    // This ensures the alternative path to T2 even if Bridge gamble fails.
-    if(CFG.ghostInsurance){
-      const hasT2orT3=[...capSet].some(id=>{const b=BLDGS.find(x=>x.id===id);return b.tier>=2});
-      if(hasT2orT3&&!GHOST_REQ.every(id=>capSet.has(id))) return false;
-    }
-    return true;
-  }
-
-  // Can we assign enough players to capture ALL buildings in capSet?
-  // Quick feasibility check using greedy matching.
-  function checkFeasibility(capSet){
-    // Collect all slots that need covering
-    const needed=[];
-    for(const bid of capSet){
-      for(const s of openSlots[bid]) needed.push(s);
-    }
-    // Also collect non-capture slots (for remaining attacks → extra wins)
-    const extra=[];
-    BLDGS.forEach(b=>{
-      if(capSet.has(b.id)) return;
-      // Can we even reach this building?
-      if(b.tier===2&&!isT2Unlocked(capSet)) return;
-      if(b.tier===3&&!isCitUnlocked(capSet)) return;
-      for(const s of openSlots[b.id]) extra.push(s);
-    });
-
-    // Greedy: assign needed slots first (scarcity-sorted), then extra
+  function isT2U(cs){return cs.has('bridge')||GHOST_REQ.every(id=>cs.has(id))}
+  function isCitU(cs){return CIT_UNLOCK.some(id=>cs.has(id))}
+  function isValid(cs){for(const id of cs){const b=BLDGS.find(x=>x.id===id);if(b.tier===2&&!isT2U(cs))return false;if(b.tier===3&&!isCitU(cs))return false}
+    if(CFG.ghostInsurance){const has2=[...cs].some(id=>{const b=BLDGS.find(x=>x.id===id);return b.tier>=2});if(has2&&!GHOST_REQ.every(id=>cs.has(id)))return false}return true}
+  function checkFeas(capSet){
+    const needed=[],extra=[];for(const bid of capSet)for(const s of openSlots[bid])needed.push(s);
+    BLDGS.forEach(b=>{if(capSet.has(b.id))return;if(b.tier===2&&!isT2U(capSet))return;if(b.tier===3&&!isCitU(capSet))return;for(const s of openSlots[b.id])extra.push(s)});
     const pac={};roster.forEach(p=>pac[p.id]=0);
-    const maxAtk={};roster.forEach(p=>maxAtk[p.id]=atkLeft[p.id]);
+    needed.forEach(s=>{s._c=roster.filter(p=>atkLeft[p.id]-pac[p.id]>0&&canBeat(p,s.effPow,s.tt)).length});
+    needed.sort((a,b)=>a._c-b._c);let wins=0;
+    for(const s of needed){const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt))
+      .map(p=>({p,b:canBeat(p,s.effPow,s.tt)})).filter(c=>c.b).sort((a,b)=>a.b.pow-b.b.pow);
+      if(!cs.length)return null;pac[cs[0].p.id]++;wins++}
+    extra.sort((a,b)=>b.effPow-a.effPow);
+    for(const s of extra){const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt));
+      if(!cs.length)continue;cs.sort((a,b)=>atkEP(a,s.tt,false)-atkEP(b,s.tt,false));pac[cs[0].id]++;wins++}
+    let bonus=0;for(const bid of capSet)bonus+=BLDGS.find(b=>b.id===bid).bonus;
+    BLDGS.forEach(b=>{if(capSet.has(b.id))return;if(b.tier===2&&!isT2U(capSet))return;if(b.tier===3&&!isCitU(capSet))return;
+      const allD=enmDef[b.id].filter(s=>s.power>0);if(allD.every((s,i)=>closedSet.has(b.id+':'+i))||!allD.length)bonus+=b.bonus});
+    return{wins,bonus,score:wins*CFG.fightPts+bonus}}
+  let bestCapSet=null,bestScore=-1;
+  for(let mask=0;mask<(1<<BLDGS.length);mask++){const cs=new Set();for(let i=0;i<BLDGS.length;i++)if(mask&(1<<i))cs.add(bids[i]);
+    if(!isValid(cs))continue;const r=checkFeas(cs);if(r&&r.score>bestScore){bestScore=r.score;bestCapSet=new Set(cs)}}
+  if(!bestCapSet)bestCapSet=new Set();
 
-    // Count candidates per needed slot
-    needed.forEach(s=>{
-      s._cands=roster.filter(p=>maxAtk[p.id]>0&&canBeat(p,s.effPow,s.tt)).length;
-    });
-    needed.sort((a,b)=>a._cands-b._cands);
-
-    let wins=0;
-    const usedSlots=new Set();
-    for(const s of needed){
-      const cands=roster.filter(p=>(maxAtk[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt))
-        .map(p=>({p,beat:canBeat(p,s.effPow,s.tt)})).filter(c=>c.beat);
-      if(!cands.length) return null; // can't capture this building
-      // Pick: least opportunity cost (simplified: weakest sufficient)
-      cands.sort((a,b)=>a.beat.pow-b.beat.pow);
-      pac[cands[0].p.id]++;
-      wins++;
-      usedSlots.add(s.bid+':'+s.defIdx);
-    }
-    // Extra slots — spend remaining attacks
-    extra.sort((a,b)=>b.effPow-a.effPow); // strongest first (harder to fill later)
-    for(const s of extra){
-      const cands=roster.filter(p=>(maxAtk[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt));
-      if(!cands.length) continue;
-      cands.sort((a,b)=>(a.tPow||0)+(a.hPow||0)-((b.tPow||0)+(b.hPow||0))); // weakest
-      pac[cands[0].id]++;
-      wins++;
-    }
-    let bonus=0;
-    for(const bid of capSet) bonus+=BLDGS.find(b=>b.id===bid).bonus;
-    // Also count auto-captured buildings not in capSet
-    // (buildings where all slots are already closed)
-    BLDGS.forEach(b=>{
-      if(capSet.has(b.id)) return;
-      if(b.tier===2&&!isT2Unlocked(capSet)) return;
-      if(b.tier===3&&!isCitUnlocked(capSet)) return;
-      const allDefs=enmDef[b.id].filter(s=>s.power>0);
-      const allClosed=allDefs.every((s,i)=>closedSet.has(b.id+':'+i));
-      if(allDefs.length===0||allClosed) bonus+=b.bonus;
-    });
-    return{wins,bonus,score:wins*CFG.fightPts+bonus};
-  }
-
-  // Enumerate subsets — up to 2^10=1024, fast
-  let bestCapSet=null, bestScore=-1;
-  for(let mask=0;mask<(1<<BLDGS.length);mask++){
-    const capSet=new Set();
-    for(let i=0;i<BLDGS.length;i++){
-      if(mask&(1<<i)) capSet.add(bids[i]);
-    }
-    if(!isValidSet(capSet)) continue;
-    const res=checkFeasibility(capSet);
-    if(res&&res.score>bestScore){bestScore=res.score;bestCapSet=new Set(capSet)}
-  }
-  // Fallback: empty capture set (just win what we can)
-  if(!bestCapSet) bestCapSet=new Set();
-
-  // ── Phase 2: Execute assignment with chosen capture plan ──
-  const plan={}, pp={};
-  roster.forEach(p=>pp[p.id]=[]);
+  // Phase 2: Execute
+  const plan={},pp={};roster.forEach(p=>pp[p.id]=[]);
   BLDGS.forEach(b=>plan[b.id]={slots:[],captured:false,bonus:0,locked:true});
-
-  // Mark closed
-  closedSet.forEach(key=>{
-    const[bid,idx]=key.split(':');
-    if(plan[bid]) plan[bid].slots.push({defIdx:parseInt(idx),pid:null,result:'closed'});
-  });
-
-  // Determine which buildings are reachable
-  BLDGS.forEach(b=>{
-    if(b.tier===1){plan[b.id].locked=false;return}
-    if(b.tier===2&&isT2Unlocked(bestCapSet)){plan[b.id].locked=false;return}
-    if(b.tier===3&&isCitUnlocked(bestCapSet)){plan[b.id].locked=false;return}
-  });
-
+  closedSet.forEach(k=>{const[bid,idx]=k.split(':');if(plan[bid])plan[bid].slots.push({defIdx:parseInt(idx),pid:null,result:'closed'})});
+  BLDGS.forEach(b=>{if(b.tier===1)plan[b.id].locked=false;else if(b.tier===2&&isT2U(bestCapSet))plan[b.id].locked=false;else if(b.tier===3&&isCitU(bestCapSet))plan[b.id].locked=false});
   const PAC={};roster.forEach(p=>PAC[p.id]=preSpent?.[p.id]||0);
   const assigned=new Set();
+  function assignSlot(slot,p,beat){PAC[p.id]++;const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,result:beat.result,gamble:beat.gamble,myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
+    plan[slot.bid].slots.push(a);pp[p.id].push({bid:slot.bid,si:slot.defIdx,...a});assigned.add(slot.bid+':'+slot.defIdx)}
+  function checkCaps(){BLDGS.forEach(b=>{if(plan[b.id].locked)return;const allD=enmDef[b.id].filter(s=>s.power>0);
+    if(!allD.length){plan[b.id].captured=true;plan[b.id].bonus=b.bonus;return}
+    const cov=new Set(plan[b.id].slots.filter(s=>s.result&&s.result!=='none').map(s=>s.defIdx));
+    plan[b.id].captured=enmDef[b.id].every((s,i)=>!s.power||cov.has(i));plan[b.id].bonus=plan[b.id].captured?b.bonus:0})}
 
-  function assignSlot(slot,p,beat){
-    PAC[p.id]++;
-    const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,
-      result:beat.result,gamble:beat.gamble,
-      myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
-    plan[slot.bid].slots.push(a);
-    pp[p.id].push({bid:slot.bid,si:slot.defIdx,...a});
-    assigned.add(slot.bid+':'+slot.defIdx);
+  const heroSlots=[],titanSlots=[];
+  BLDGS.forEach(b=>{if(plan[b.id].locked)return;for(const s of openSlots[b.id]){if(s.tt==='h')heroSlots.push(s);else titanSlots.push(s)}});
+
+  function runPhase(slots,sortFn,filterFn){
+    for(let iter=0;iter<slots.length*2;iter++){
+      slots.forEach(s=>{if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
+        s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&filterFn(p)&&canBeat(p,s.effPow,s.tt)).length});
+      let bs=null,bc=Infinity;for(const s of slots){if(assigned.has(s.bid+':'+s.defIdx))continue;
+        if(s.cands>0&&(s.cands<bc||(s.cands===bc&&bs&&s.effPow>bs.effPow))){bc=s.cands;bs=s}}
+      if(!bs)break;
+      const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&filterFn(p)&&canBeat(p,bs.effPow,bs.tt))
+        .map(p=>{const beat=canBeat(p,bs.effPow,bs.tt);
+          const rq=beat.result==='win'?0:beat.result==='risky'?1:2;
+          return{p,beat,waste:beat.pow-bs.effPow,sb:pp[p.id].some(a=>a.bid===bs.bid)?1:0,rq}}).filter(c=>c.beat);
+      if(!cs.length){assigned.add(bs.bid+':'+bs.defIdx);continue}
+      sortFn(cs);
+      let pick=cs[0];const isCrit=CIT_UNLOCK.includes(bs.bid)||bs.bid==='citadel';
+      if(isCrit&&pick.p.risk&&cs.length>1){const nr=cs.find(c=>!c.p.risk);if(nr)pick=nr}
+      assignSlot(bs,pick.p,pick.beat);
+    }}
+
+  // R1: Top-half hero players (by hPow), 1 attack each, strongest on scarcest hero slot
+  const heroRanked=[...roster].filter(p=>PAC[p.id]<MAX_ATK).sort((a,b)=>b.hPow-a.hPow);
+  const topHalf=new Set(heroRanked.slice(0,Math.ceil(heroRanked.length/2)).map(p=>p.id));
+  const r1used=new Set();
+  for(let iter=0;iter<heroSlots.length;iter++){
+    heroSlots.forEach(s=>{if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
+      s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&topHalf.has(p.id)&&!r1used.has(p.id)&&canBeat(p,s.effPow,'h')).length});
+    let bs=null,bc=Infinity;for(const s of heroSlots){if(assigned.has(s.bid+':'+s.defIdx))continue;
+      if(s.cands>0&&(s.cands<bc||(s.cands===bc&&bs&&s.effPow>bs.effPow))){bc=s.cands;bs=s}}
+    if(!bs)break;
+    const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&topHalf.has(p.id)&&!r1used.has(p.id)&&canBeat(p,bs.effPow,'h'))
+      .map(p=>({p,beat:canBeat(p,bs.effPow,'h')})).filter(c=>c.beat).sort((a,b)=>b.beat.pow-a.beat.pow);
+    if(!cs.length)continue;
+    assignSlot(bs,cs[0].p,cs[0].beat);r1used.add(cs[0].p.id)}
+
+  // R2: Titan slots — weakest sufficient, same-building preference
+  runPhase(titanSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
+  // R3: Remaining hero slots — 2nd hero attacks, strongest
+  runPhase(heroSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||b.beat.pow-a.beat.pow),p=>true);
+  // R4: Remaining titan slots
+  runPhase(titanSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
+
+  // Last resort: non-E5 on remaining titan slots
+  const unassignedT=titanSlots.filter(s=>!assigned.has(s.bid+':'+s.defIdx));
+  if(unassignedT.length){
+    roster.forEach(p=>p._lastResort=true);
+    runPhase(unassignedT,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
+    roster.forEach(p=>delete p._lastResort);
   }
-  function checkAllCaptures(){
-    BLDGS.forEach(b=>{
-      if(plan[b.id].locked) return;
-      const allD=enmDef[b.id].filter(s=>s.power>0);
-      if(!allD.length){plan[b.id].captured=true;plan[b.id].bonus=b.bonus;return}
-      const cov=new Set(plan[b.id].slots.filter(s=>s.result&&s.result!=='none').map(s=>s.defIdx));
-      plan[b.id].captured=enmDef[b.id].every((s,i)=>!s.power||cov.has(i));
-      plan[b.id].bonus=plan[b.id].captured?b.bonus:0;
-    });
-  }
+  checkCaps();
 
-  // Collect all open slots from reachable buildings
-  const allSlots=[];
-  BLDGS.forEach(b=>{
-    if(plan[b.id].locked) return;
-    for(const s of openSlots[b.id]) allSlots.push(s);
-  });
-
-  // Scarcity: count available candidates per open slot
-  // PAC starts at preSpent, increments with new assignments → PAC < MAX_ATK = has attacks left
-  function refreshScarcity(){
-    allSlots.forEach(s=>{
-      if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
-      s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&canBeat(p,s.effPow,s.tt)).length;
-    });
-  }
-
-  function opportunityCost(p,slot){
-    let cost=0;
-    for(const os of allSlots){
-      if(assigned.has(os.bid+':'+os.defIdx)) continue;
-      if(os.bid===slot.bid&&os.defIdx===slot.defIdx) continue;
-      if(!canBeat(p,os.effPow,os.tt)) continue;
-      // Slots in capture-plan buildings are more critical
-      const inCapPlan=bestCapSet.has(os.bid)?3:1;
-      if(os.cands<=2) cost+=10*inCapPlan;
-      else if(os.cands<=4) cost+=3*inCapPlan;
-      else cost+=inCapPlan;
-    }
-    return cost;
-  }
-
-  // Priority: capture-plan slots first, then extras
-  for(let iter=0;iter<allSlots.length*2;iter++){
-    refreshScarcity();
-
-    let bestSlot=null, bestC=Infinity;
-    for(const s of allSlots){
-      if(assigned.has(s.bid+':'+s.defIdx)) continue;
-      // Capture-plan slots get priority (lower virtual cands)
-      const eff=bestCapSet.has(s.bid)?s.cands:s.cands+1000;
-      if(eff<bestC){bestC=eff;bestSlot=s}
-      else if(eff===bestC&&bestSlot){
-        const bA=BLDGS.find(x=>x.id===s.bid).bonus;
-        const bB=BLDGS.find(x=>x.id===bestSlot.bid).bonus;
-        if(bA>bB||(bA===bB&&s.effPow>bestSlot.effPow)) bestSlot=s;
-      }
-    }
-    if(!bestSlot||bestC>=90000) break; // capture slots done, try extras
-    if(!bestSlot) break;
-
-    const cands=roster
-      .filter(p=>PAC[p.id]<MAX_ATK&&canBeat(p,bestSlot.effPow,bestSlot.tt))
-      .map(p=>{
-        const beat=canBeat(p,bestSlot.effPow,bestSlot.tt);
-        const waste=beat.pow-bestSlot.effPow;
-        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?5:0;
-        return{p,beat,waste,sameBldg};
-      }).filter(c=>c.beat);
-
-    if(!cands.length){assigned.add(bestSlot.bid+':'+bestSlot.defIdx);continue}
-
-    // Heroes: strongest player on scarcest slot (scarcity loop ensures hardest first)
-    // Titans: weakest sufficient (predictable fights, save power)
-    // Same-building bonus for coordination
-    if(bestSlot.tt==='h')
-      cands.sort((a,b)=>b.beat.pow-a.beat.pow||b.sameBldg-a.sameBldg);
-    else
-      cands.sort((a,b)=>a.waste-b.waste||b.sameBldg-a.sameBldg);
-
-    let pick=cands[0];
-    const isCrit=CIT_UNLOCK.includes(bestSlot.bid)||bestSlot.bid==='citadel';
-    if(isCrit&&pick.p.risk&&cands.length>1){
-      const nr=cands.find(c=>!c.p.risk);
-      if(nr) pick=nr;
-    }
-    assignSlot(bestSlot,pick.p,pick.beat);
-  }
-
-  // Now assign extra (non-capture) slots with remaining attacks
-  for(let iter=0;iter<allSlots.length;iter++){
-    refreshScarcity();
-    let bestSlot=null, bestC=Infinity;
-    for(const s of allSlots){
-      if(assigned.has(s.bid+':'+s.defIdx)) continue;
-      if(s.cands<bestC){bestC=s.cands;bestSlot=s}
-      else if(s.cands===bestC&&bestSlot){
-        const bA=BLDGS.find(x=>x.id===s.bid).bonus;
-        const bB=BLDGS.find(x=>x.id===bestSlot.bid).bonus;
-        if(bA>bB||(bA===bB&&s.effPow>bestSlot.effPow)) bestSlot=s;
-      }
-    }
-    if(!bestSlot||bestC===0) break;
-
-    const cands=roster
-      .filter(p=>PAC[p.id]<MAX_ATK&&canBeat(p,bestSlot.effPow,bestSlot.tt))
-      .map(p=>{
-        const beat=canBeat(p,bestSlot.effPow,bestSlot.tt);
-        const waste=beat.pow-bestSlot.effPow;
-        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?5:0;
-        return{p,beat,waste,sameBldg};
-      }).filter(c=>c.beat);
-
-    if(!cands.length){assigned.add(bestSlot.bid+':'+bestSlot.defIdx);continue}
-    if(bestSlot.tt==='h')
-      cands.sort((a,b)=>b.beat.pow-a.beat.pow||b.sameBldg-a.sameBldg);
-    else
-      cands.sort((a,b)=>a.waste-b.waste||b.sameBldg-a.sameBldg);
-    assignSlot(bestSlot,cands[0].p,cands[0].beat);
-  }
-  checkAllCaptures();
-
-  // ── Phase 3: Swap optimization — reduce risks ──
-  for(let iter=0;iter<10;iter++){
-    let imp=false;
-    const aa=[];
-    BLDGS.forEach(b=>{
-      if(plan[b.id].locked) return;
-      plan[b.id].slots.filter(s=>s.pid&&s.result!=='closed').forEach(s=>aa.push({bid:b.id,s}));
-    });
-    for(let i=0;i<aa.length;i++) for(let j=i+1;j<aa.length;j++){
+  // Phase 3: Swap
+  for(let it=0;it<10;it++){let imp=false;const aa=[];
+    BLDGS.forEach(b=>{if(plan[b.id].locked)return;plan[b.id].slots.filter(s=>s.pid&&s.result!=='closed').forEach(s=>aa.push({bid:b.id,s}))});
+    for(let i=0;i<aa.length;i++)for(let j=i+1;j<aa.length;j++){
       const{bid:b1,s:s1}=aa[i],{bid:b2,s:s2}=aa[j];
-      const t1=BLDGS.find(x=>x.id===b1).type==='titans'?'t':'h';
-      const t2=BLDGS.find(x=>x.id===b2).type==='titans'?'t':'h';
-      if(t1!==t2||s1.pid===s2.pid) continue;
-      const p1=roster.find(r=>r.id===s1.pid),p2=roster.find(r=>r.id===s2.pid);
-      if(!p1||!p2) continue;
-      const b1on2=canBeat(p1,s2.defPow,t2),b2on1=canBeat(p2,s1.defPow,t1);
-      if(!b1on2||!b2on1) continue;
-      const oldR=(s1.result!=='win'?1:0)+(s2.result!=='win'?1:0);
-      const newR=(b2on1.result!=='win'?1:0)+(b1on2.result!=='win'?1:0);
-      if(newR<oldR){
-        s1.pid=p2.id;s1.result=b2on1.result;s1.gamble=b2on1.gamble;s1.myPow=b2on1.pow;s1.e5=p2.e5!==false;
-        s2.pid=p1.id;s2.result=b1on2.result;s2.gamble=b1on2.gamble;s2.myPow=b1on2.pow;s2.e5=p1.e5!==false;
-        roster.forEach(r=>pp[r.id]=[]);
-        BLDGS.forEach(b=>plan[b.id].slots.filter(s=>s.pid).forEach(s=>{
-          pp[s.pid].push({bid:b.id,si:s.defIdx,...s});
-        }));
-        imp=true;
-      }
-    }
-    if(!imp) break;
-  }
-  checkAllCaptures();
-
-  let score=0;
-  BLDGS.forEach(b=>{
-    if(plan[b.id].locked) return;
-    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length*CFG.fightPts;
-    if(plan[b.id].captured) score+=b.bonus;
-  });
+      const t1=BLDGS.find(x=>x.id===b1).type==='titans'?'t':'h',t2=BLDGS.find(x=>x.id===b2).type==='titans'?'t':'h';
+      if(t1!==t2||s1.pid===s2.pid)continue;
+      const p1=roster.find(r=>r.id===s1.pid),p2=roster.find(r=>r.id===s2.pid);if(!p1||!p2)continue;
+      const a=canBeat(p1,s2.defPow,t2),b=canBeat(p2,s1.defPow,t1);if(!a||!b)continue;
+      if((a.result!=='win'?1:0)+(b.result!=='win'?1:0)<(s1.result!=='win'?1:0)+(s2.result!=='win'?1:0)){
+        s1.pid=p2.id;s1.result=b.result;s1.gamble=b.gamble;s1.myPow=b.pow;s1.e5=p2.e5!==false;
+        s2.pid=p1.id;s2.result=a.result;s2.gamble=a.gamble;s2.myPow=a.pow;s2.e5=p1.e5!==false;
+        roster.forEach(r=>pp[r.id]=[]);BLDGS.forEach(b=>plan[b.id].slots.filter(s=>s.pid).forEach(s=>{pp[s.pid].push({bid:b.id,si:s.defIdx,...s})}));imp=true}}
+    if(!imp)break}
+  checkCaps();
+  let score=0;BLDGS.forEach(b=>{if(plan[b.id].locked)return;score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length*CFG.fightPts;if(plan[b.id].captured)score+=b.bonus});
   return{plan,pp,score};
 }
 
-// ═══════════════════════════════════════════════
-// SCORE + RUN
-// ═══════════════════════════════════════════════
-function getScore(plan){
-  if(!plan) return{wins:0,risky:0,gambles:0,bonus:0,total:0,caps:0,totalWins:0};
-  let wins=0,risky=0,gambles=0,bonus=0,caps=0;
-  BLDGS.forEach(b=>{
-    const p=plan[b.id];if(!p||p.locked) return;
-    wins+=p.slots.filter(s=>s.result==='win').length;
-    risky+=p.slots.filter(s=>s.result==='risky').length;
-    gambles+=p.slots.filter(s=>s.result==='gamble').length;
-    if(p.captured){bonus+=p.bonus;caps++}
-  });
-  const tw=wins+risky+gambles;
-  return{wins,risky,gambles,totalWins:tw,bonus,total:tw*CFG.fightPts+bonus,caps};
-}
-function runCalc(){
-  spentAttempts={};closedSlots=new Set();
-  const mx=calcAtk('max'),sf=calcAtk('safe');
-  result={max:mx,safe:sf};
-  activePlan='max';renderScore();setTab(2);saveLS();
-}
-function calcRemaining(){
-  if(!result) return;
-  const mx=calcAtk('max',spentAttempts,closedSlots);
-  const sf=calcAtk('safe',spentAttempts,closedSlots);
-  result={max:mx,safe:sf};
-}
+// ═══ SCORE + RUN ═══
+function getScore(plan){if(!plan)return{wins:0,risky:0,gambles:0,bonus:0,total:0,caps:0,totalWins:0};
+  let wins=0,risky=0,gambles=0,bonus=0,caps=0;BLDGS.forEach(b=>{const p=plan[b.id];if(!p||p.locked)return;
+    wins+=p.slots.filter(s=>s.result==='win').length;risky+=p.slots.filter(s=>s.result==='risky').length;
+    gambles+=p.slots.filter(s=>s.result==='gamble').length;if(p.captured){bonus+=p.bonus;caps++}});
+  const tw=wins+risky+gambles;return{wins,risky,gambles,totalWins:tw,bonus,total:tw*CFG.fightPts+bonus,caps}}
+function runCalc(){spentAttempts={};closedSlots=new Set();result={max:calcAtk('max'),safe:calcAtk('safe')};activePlan='max';renderScore();setTab(2);saveLS()}
+function calcRemaining(){if(!result)return;result={max:calcAtk('max',spentAttempts,closedSlots),safe:calcAtk('safe',spentAttempts,closedSlots)}}
 
-// ═══════════════════════════════════════════════
-// RENDER — SCORE BAR
-// ═══════════════════════════════════════════════
+// ═══ RENDER SCORE BAR ═══
 function renderScore(){
-  const r=result?result[activePlan]:null;
-  const sc=getScore(r?.plan);
-  const w=sc.risky+sc.gambles;
-  const wH=w>0?` <span style="color:var(--warn);font-size:10px">(+${w}⚠)</span>`:'';
+  const r=result?result[activePlan]:null;const sc=getScore(r?.plan);
+  const fact=getFactPts();
+  const w=sc.risky+sc.gambles;const wH=w>0?` <span style="color:var(--warn)">(+${w}⚠)</span>`:'';
+  const factH=fact.closed>0?`<div class="sm sdiv"><small>Fact</small><b style="color:var(--acc)">${fact.pts}</b></div>`:'';
   document.getElementById('scoreBar').innerHTML=
-    `<div class="sm"><small>Safe wins</small><b style="color:var(--win)">${sc.wins}${wH}</b></div>
-     <div class="sm"><small>×${CFG.fightPts}</small><b>${sc.totalWins*CFG.fightPts}</b></div>
-     <div class="sm sdiv"><small>Bonus</small><b style="color:var(--acc)">${sc.bonus}</b></div>
-     <div class="sm sdiv"><small>Total</small><b style="font-size:20px;color:var(--win)">${sc.total}</b></div>
-     <div class="sm sdiv"><small>🏴</small><b style="color:var(--acc)">${sc.caps}/${BLDGS.length}</b></div>
+    `<div class="sm"><small>Plan</small><b style="color:var(--win)">${sc.total}</b></div>
+     ${factH}
+     <div class="sm sdiv"><small>Wins</small><b>${sc.wins}${wH}</b></div>
+     <div class="sm sdiv"><small>🏴</small><b>${sc.caps}/${BLDGS.length}</b></div>
      <div class="sm sdiv"><small>Players</small><b style="color:var(--tx2)">${roster.length}</b></div>`;
 }
 
-// ═══════════════════════════════════════════════
-// RENDER — ROSTER
-// ═══════════════════════════════════════════════
-function enmSlotsList(){const sl=[];BLDGS.forEach(b=>{for(let i=0;i<b.slots;i++)sl.push({bid:b.id,si:i})});return sl}
-function enmPowEnter(e,bid,si){
-  if(e.key!=='Enter') return;e.preventDefault();
-  enmDef[bid][si].power=parseFloat(e.target.value)||0;saveLS();updateButtons();
-  const sl=enmSlotsList();const ci=sl.findIndex(s=>s.bid===bid&&s.si===si);
-  const nx=sl[ci+1];
-  if(nx){const el=document.getElementById(`en_${nx.bid}_${nx.si}`);if(el){el.focus();el.select()}}
-}
-function rNameEnter(e,i){
-  if(e.key!=='Enter') return;e.preventDefault();
-  roster[i].name=e.target.value;saveLS();
-  if(i+1>=roster.length&&i+1<MAX_P) addPlayer();
-  const nx=document.getElementById(`rn_${i+1}`);if(nx){nx.focus();nx.select()}
-}
-function rPowEnter(e,i,f){
-  if(e.key!=='Enter') return;e.preventDefault();
-  if(f==='h') roster[i].hPow=parseFloat(e.target.value)||0;
-  else roster[i].tPow=parseFloat(e.target.value)||0;
-  saveLS();
-  let ni=i,nf=f;if(f==='h'){nf='t'}else{nf='h';ni=i+1}
-  if(ni>=roster.length&&ni<MAX_P) addPlayer();
-  const nx=document.getElementById(`rp_${ni}_${nf}`);if(nx){nx.focus();nx.select()}
-}
+// ═══ RENDER ROSTER ═══
+function enmPowEnter(e,bid,si){if(e.key!=='Enter')return;e.preventDefault();enmDef[bid][si].power=parseFloat(e.target.value)||0;saveLS();updateButtons();
+  const sl=[];BLDGS.forEach(b=>{for(let i=0;i<b.slots;i++)sl.push({bid:b.id,si:i})});const ci=sl.findIndex(s=>s.bid===bid&&s.si===si);const nx=sl[ci+1];
+  if(nx){const el=document.getElementById(`en_${nx.bid}_${nx.si}`);if(el){el.focus();el.select()}}}
+function rNameEnter(e,i){if(e.key!=='Enter')return;e.preventDefault();roster[i].name=e.target.value;saveLS();if(i+1>=roster.length&&i+1<MAX_P)addPlayer();
+  const nx=document.getElementById(`rn_${i+1}`);if(nx){nx.focus();nx.select()}}
+function rPowEnter(e,i,f){if(e.key!=='Enter')return;e.preventDefault();if(f==='h')roster[i].hPow=parseFloat(e.target.value)||0;else roster[i].tPow=parseFloat(e.target.value)||0;saveLS();
+  let ni=i,nf=f;if(f==='h'){nf='t'}else{nf='h';ni=i+1}if(ni>=roster.length&&ni<MAX_P)addPlayer();const nx=document.getElementById(`rp_${ni}_${nf}`);if(nx){nx.focus();nx.select()}}
 
 function renderRoster(){
-  const btn=document.getElementById('addBtn');
-  if(btn) btn.textContent=`+ (${roster.length}/${MAX_P})`;
+  const btn=document.getElementById('addBtn');if(btn){btn.textContent='+';btn.disabled=roster.length>=MAX_P}
   const rc=document.getElementById('rosterCount');
-  if(rc){
-    const totalH=roster.reduce((s,p)=>s+(p.hPow||0),0);
-    const totalT=roster.reduce((s,p)=>s+(p.tPow||0),0);
-    rc.textContent=`${roster.length} players · ⚔️${totalH}K · ⚡${totalT}K`;
-  }
+  if(rc)rc.textContent=`${roster.length}p`;
   const w=document.getElementById('rosterWrap');
-  if(!roster.length){w.innerHTML='<div style="color:var(--tx3);font-size:11px">No players.</div>';return}
+  if(!roster.length){w.innerHTML='<div style="color:var(--tx3);font-size:10px">No players</div>';return}
   const ds=defSet(),half=Math.ceil(roster.length/2);
-  const mkT=(from,to)=>{
-    if(from>=roster.length) return'';
-    let h=`<table><thead><tr>
-      <th style="width:18px">#</th><th>Name</th>
-      <th style="width:62px;text-align:right">⚔️K</th>
-      <th style="width:62px;text-align:right">⚡K</th>
-      <th style="width:24px">E5</th><th style="width:24px">🚧</th>
-      <th style="width:48px;text-align:center">Def</th>
-      <th style="width:16px"></th>
-    </tr></thead><tbody>`;
-    for(let i=from;i<Math.min(to,roster.length);i++){
-      const p=roster[i];
-      const hD=ds.has('h_'+p.id),tD=ds.has('t_'+p.id);
-      const dt=hD&&tD?'🛡🛡':hD?'⚔🛡':tD?'⚡🛡':'—';
-      const hl=defChanges['h_'+p.id]==='freed'||defChanges['t_'+p.id]==='freed'?'background:var(--losebg)':
-        defChanges['h_'+p.id]==='assigned'||defChanges['t_'+p.id]==='assigned'?'background:var(--accbg)':'';
-      h+=`<tr${hl?` style="${hl}"`:''}>
-        <td style="color:var(--tx3)">${i+1}</td>
-        <td><input type="text" id="rn_${i}" value="${esc(p.name)}" placeholder="name"
-          style="width:100%;font-size:10px;padding:2px 4px"
-          onchange="roster[${i}].name=this.value;saveLS()"
-          onkeydown="rNameEnter(event,${i})"></td>
-        <td><input type="text" inputmode="decimal" value="${p.hPow||0}" class="num"
-          id="rp_${i}_h" style="font-size:10px;padding:2px 4px"
-          onfocus="if(this.value==='0')this.value=''"
-          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="roster[${i}].hPow=parseFloat(this.value)||0;saveLS()"
-          onkeydown="rPowEnter(event,${i},'h')"></td>
-        <td><input type="text" inputmode="decimal" value="${p.tPow||0}" class="num"
-          id="rp_${i}_t" style="font-size:10px;padding:2px 4px"
-          onfocus="if(this.value==='0')this.value=''"
-          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="roster[${i}].tPow=parseFloat(this.value)||0;saveLS()"
-          onkeydown="rPowEnter(event,${i},'t')"></td>
-        <td style="text-align:center"><input type="checkbox" ${p.e5!==false?'checked':''}
-          onchange="roster[${i}].e5=this.checked;saveLS()"></td>
-        <td style="text-align:center"><input type="checkbox" ${p.risk?'checked':''}
-          onchange="roster[${i}].risk=this.checked;saveLS()"></td>
-        <td style="text-align:center;font-size:10px;color:var(--tx3)">${dt}</td>
-        <td><button class="btn btn-d" style="padding:0 4px;font-size:9px;line-height:1.6"
-          onclick="removePlayer(${i})">×</button></td>
-      </tr>`;
-    }
-    return h+'</tbody></table>';
-  };
-  w.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">${mkT(0,half)}${mkT(half,roster.length)}</div>`;
-}
+  const mkT=(from,to)=>{if(from>=roster.length)return'';
+    let h=`<table><thead><tr><th>#</th><th>Name</th><th style="text-align:right">⚔️</th><th></th><th style="text-align:right">⚡</th><th></th><th>E5</th><th>🚧</th><th>Def</th><th></th></tr></thead><tbody>`;
+    for(let i=from;i<Math.min(to,roster.length);i++){const p=roster[i];
+      const hD=ds.has('h_'+p.id),tD=ds.has('t_'+p.id);const dt=hD&&tD?'🛡🛡':hD?'⚔🛡':tD?'⚡🛡':'—';
+      h+=`<tr><td style="color:var(--tx3)">${i+1}</td>
+        <td><input type="text" id="rn_${i}" value="${esc(p.name)}" placeholder="name" style="width:100%;font-size:10px;padding:1px 3px" onchange="roster[${i}].name=this.value;saveLS()" onkeydown="rNameEnter(event,${i})"></td>
+        <td><input type="text" inputmode="decimal" value="${p.hPow||0}" class="num" id="rp_${i}_h" style="font-size:10px;padding:1px 3px" onfocus="if(this.value==='0')this.value=''" onblur="if(!this.value||isNaN(+this.value))this.value='0'" onchange="roster[${i}].hPow=parseFloat(this.value)||0;saveLS()" onkeydown="rPowEnter(event,${i},'h')"></td>
+        <td><div style="display:flex;gap:1px"><button class="inc-btn" onmousedown="incStart(${i},'hPow',-1)" onmouseup="incStop()" onmouseleave="incStop()" ontouchstart="incStart(${i},'hPow',-1)" ontouchend="incStop()">−</button><button class="inc-btn" onmousedown="incStart(${i},'hPow',1)" onmouseup="incStop()" onmouseleave="incStop()" ontouchstart="incStart(${i},'hPow',1)" ontouchend="incStop()">+</button></div></td>
+        <td><input type="text" inputmode="decimal" value="${p.tPow||0}" class="num" id="rp_${i}_t" style="font-size:10px;padding:1px 3px" onfocus="if(this.value==='0')this.value=''" onblur="if(!this.value||isNaN(+this.value))this.value='0'" onchange="roster[${i}].tPow=parseFloat(this.value)||0;saveLS()" onkeydown="rPowEnter(event,${i},'t')"></td>
+        <td><div style="display:flex;gap:1px"><button class="inc-btn" onmousedown="incStart(${i},'tPow',-1)" onmouseup="incStop()" onmouseleave="incStop()" ontouchstart="incStart(${i},'tPow',-1)" ontouchend="incStop()">−</button><button class="inc-btn" onmousedown="incStart(${i},'tPow',1)" onmouseup="incStop()" onmouseleave="incStop()" ontouchstart="incStart(${i},'tPow',1)" ontouchend="incStop()">+</button></div></td>
+        <td style="text-align:center"><input type="checkbox" ${p.e5!==false?'checked':''} onchange="roster[${i}].e5=this.checked;saveLS()"></td>
+        <td style="text-align:center"><input type="checkbox" ${p.risk?'checked':''} onchange="roster[${i}].risk=this.checked;saveLS()"></td>
+        <td style="text-align:center;font-size:9px;color:var(--tx3)">${dt}</td>
+        <td><button class="btn btn-d" style="padding:0 3px;font-size:8px" onclick="removePlayer(${i})">×</button></td></tr>`}
+    return h+'</tbody></table>'};
+  w.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">${mkT(0,half)}${mkT(half,roster.length)}</div>`}
 
-// ═══════════════════════════════════════════════
-// TABS
-// ═══════════════════════════════════════════════
+// ═══ TABS ═══
 function setTab(n){activeTab=n;[0,1,2].forEach(i=>document.getElementById('tab'+i).classList.toggle('on',i===n));renderTab(n)}
-function renderTab(n){if(n===0) renderOurDef();else if(n===1) renderEnmDef();else renderResults()}
+function renderTab(n){if(n===0)renderEnmDef();else if(n===1)renderOurDef();else renderResults()}
 
-// ═══════════════════════════════════════════════
-// TAB 0 — OUR DEFENSE
-// ═══════════════════════════════════════════════
-function bldgCardDef(b){
-  const isT=b.type==='titans',pool=isT?titanSlots():heroSlots();
-  const filled=ourDef[b.id].filter(x=>x).length;
-  const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
-  let t=`<table style="font-size:10px"><thead><tr>
-    <th style="width:14px">#</th><th>Player</th><th style="width:50px;text-align:right">K</th>
-  </tr></thead><tbody>`;
-  for(let i=0;i<b.slots;i++){
-    const sid=ourDef[b.id][i],inf=slotInfo(sid);
-    t+=`<tr><td style="color:var(--tx3)">${i+1}</td>
-      <td><select onchange="setOurDef('${b.id}',${i},this.value)" style="font-size:10px;width:100%">
-        <option value="">—</option>`;
-    pool.forEach(s=>{const info=slotInfo(s);if(!info)return;
-      t+=`<option value="${s}"${sid===s?' selected':''}>${esc(info.name||'?')}</option>`});
-    t+=`</select></td>
-      <td style="text-align:right;${inf?'font-weight:500':'color:var(--tx3)'}">${inf?inf.power+'K':'—'}</td></tr>`;
-  }
-  t+='</tbody></table>';
-  return`<div class="card"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-    <b style="font-size:11px">${b.ru}</b><span style="flex:1"></span>
-    <span>${isT?'⚡':'⚔️'}</span><span style="font-size:10px;font-weight:600;color:${bc}">+${b.bonus}</span>
-    <span style="font-size:9px;color:var(--tx3)">${filled}/${b.slots}</span>
-    <button class="btn btn-d btn-sm" style="padding:0 4px;font-size:8px" onclick="clearOB('${b.id}')">🗑</button>
-  </div><div style="font-size:9px;color:var(--tx3);margin-bottom:3px">${b.name}</div>${t}</div>`;
-}
-function renderOurDef(){
-  const tl=(n,s)=>`<div class="tlbl">Tier ${n} <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">${s}</span></div>`;
-  let h=tl(1,'Ghost Bridge = Barracks+Lighthouse+Mage');
-  h+=`<div class="bgrid bgrid-t1">${BLDGS.filter(b=>b.tier===1).map(bldgCardDef).join('')}</div>`;
-  h+=tl(2,'after Bridge or Ghost Bridge');
-  h+=`<div class="bgrid bgrid-t2">${BLDGS.filter(b=>b.tier===2).map(bldgCardDef).join('')}</div>`;
-  h+=tl(3,'after any Bastion (Fire/Nature/Ice)');
-  h+=`<div style="max-width:500px">${bldgCardDef(BLDGS.find(b=>b.id==='citadel'))}</div>`;
-  document.getElementById('tabContent').innerHTML=h;
-}
-
-// ═══════════════════════════════════════════════
-// TAB 1 — ENEMY DEFENSE (position + power only)
-// ═══════════════════════════════════════════════
+// ═══ TAB 0: ENEMY (first tab now) ═══
 function renderEnmDef(){
-  const tl=(n,s)=>`<div class="tlbl">Tier ${n} <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">${s}</span></div>`;
-  const enmCard=b=>{
-    const isT=b.type==='titans';
-    const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
-    const filled=enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0).length;
-    let t=`<table style="font-size:10px;width:100%"><thead><tr>
-      <th style="width:18px">#</th>
-      <th style="text-align:right">${isT?'⚡':'⚔️'} Power (K)</th>
-      ${isT?'<th style="width:26px">E5</th>':''}
-    </tr></thead><tbody>`;
-    for(let i=0;i<b.slots;i++){
-      const s=enmDef[b.id][i];
+  const tl=(n,s)=>`<div class="tlbl">Tier ${n} <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:8px">${s}</span></div>`;
+  const enmCard=b=>{const isT=b.type==='titans';const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
+    const filled=enmDef[b.id].filter(s=>s.power>0).length;
+    let t=`<table style="table-layout:fixed"><colgroup><col style="width:18px"><col style="width:70px"><col style="width:28px"></colgroup>
+      <thead><tr><th>#</th><th style="text-align:right">${isT?'⚡':'⚔️'}K</th><th>${isT?'E5':''}</th></tr></thead><tbody>`;
+    for(let i=0;i<b.slots;i++){const s=enmDef[b.id][i];
       t+=`<tr><td style="color:var(--tx3)">${i+1}</td>
-        <td><input type="text" inputmode="decimal" id="en_${b.id}_${i}" value="${s.power||0}"
-          class="num" style="font-size:10px;padding:2px 4px;width:100%"
-          onfocus="if(this.value==='0')this.value=''"
-          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="enmDef['${b.id}'][${i}].power=parseFloat(this.value)||0;saveLS();updateButtons()"
-          onkeydown="enmPowEnter(event,'${b.id}',${i})"></td>
-        ${isT?`<td style="text-align:center"><input type="checkbox" ${s.e5!==false?'checked':''}
-          onchange="enmDef['${b.id}'][${i}].e5=this.checked;saveLS()"></td>`:''}
-      </tr>`;
-    }
+        <td><input type="text" inputmode="decimal" id="en_${b.id}_${i}" value="${s.power||0}" class="num" style="font-size:11px;padding:2px 4px"
+          onfocus="if(this.value==='0')this.value=''" onblur="if(!this.value||isNaN(+this.value))this.value='0'"
+          onchange="enmDef['${b.id}'][${i}].power=parseFloat(this.value)||0;saveLS();updateButtons()" onkeydown="enmPowEnter(event,'${b.id}',${i})"></td>`;
+      if(isT)t+=`<td style="text-align:center"><input type="checkbox" ${s.e5!==false?'checked':''} onchange="enmDef['${b.id}'][${i}].e5=this.checked;saveLS()"></td>`;
+      else t+=`<td></td>`;
+      t+=`</tr>`}
     t+='</tbody></table>';
     return`<div class="card"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-      <b style="font-size:11px">${b.ru}</b><span style="flex:1"></span>
-      <span>${isT?'⚡':'⚔️'}</span><span style="font-size:10px;font-weight:600;color:${bc}">+${b.bonus}</span>
+      <b style="font-size:11px">${b.name}</b><span style="flex:1"></span><span style="font-size:9px;font-weight:600;color:${bc}">+${b.bonus}</span>
       <span style="font-size:9px;color:var(--tx3)">${filled}/${b.slots}</span>
-      <button class="btn btn-d btn-sm" style="padding:0 4px;font-size:8px" onclick="clearEB('${b.id}')">🗑</button>
-    </div><div style="font-size:9px;color:var(--tx3);margin-bottom:3px">${b.name}</div>${t}</div>`;
-  };
-  let h=`<div style="font-size:11px;color:var(--tx3);margin-bottom:8px">Enter enemy power in K. Enter→next slot.</div>`;
-  h+=tl(1,'Ghost Bridge = Barracks+Lighthouse+Mage');
-  h+=`<div class="bgrid bgrid-t1">${BLDGS.filter(b=>b.tier===1).map(enmCard).join('')}</div>`;
-  h+=tl(2,'after Bridge or Ghost Bridge');
-  h+=`<div class="bgrid bgrid-t2">${BLDGS.filter(b=>b.tier===2).map(enmCard).join('')}</div>`;
-  h+=tl(3,'after any Bastion (Fire/Nature/Ice)');
-  h+=`<div style="max-width:500px">${enmCard(BLDGS.find(b=>b.id==='citadel'))}</div>`;
-  document.getElementById('tabContent').innerHTML=h;
-}
+      <button class="btn btn-d btn-sm" style="padding:0 4px;font-size:8px" onclick="clearEB('${b.id}')">🗑</button></div>${t}</div>`};
+  const t1=BLDGS.filter(b=>b.tier===1);
+  const t2=BLDGS.filter(b=>b.tier===2);
+  const t2a=t2.slice(0,3),t2b=t2.slice(3);
+  const t3=[BLDGS.find(b=>b.id==='citadel')];
+  const col=(label,bldgs,sep)=>`<div${sep?' class="tsep"':''}><div class="tlbl">${label}</div>${bldgs.map(enmCard).join('')}</div>`;
+  let h=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:start">
+    ${col('T1',t1,true)}${col('T2',t2a)}${col('T2',t2b,true)}${col('T3',t3)}
+  </div>`;
+  document.getElementById('tabContent').innerHTML=h}
 
-// ═══════════════════════════════════════════════
-// TAB 2 — RESULTS
-// ═══════════════════════════════════════════════
+// ═══ TAB 1: OUR DEFENSE ═══
+function bldgCardDef(b){const isT=b.type==='titans',pool=isT?titanSlots():heroSlots();
+  const filled=ourDef[b.id].filter(x=>x).length;const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
+  let t=`<table><thead><tr><th>#</th><th>Player</th><th style="text-align:right">K</th></tr></thead><tbody>`;
+  for(let i=0;i<b.slots;i++){const sid=ourDef[b.id][i],inf=slotInfo(sid);
+    t+=`<tr><td style="color:var(--tx3)">${i+1}</td><td><select onchange="setOurDef('${b.id}',${i},this.value)" style="font-size:10px;width:100%"><option value="">—</option>`;
+    pool.forEach(s=>{const info=slotInfo(s);if(!info)return;t+=`<option value="${s}"${sid===s?' selected':''}>${esc(info.name||'?')}</option>`});
+    t+=`</select></td><td style="text-align:right;${inf?'':'color:var(--tx3)'}">${inf?inf.power+'K':'—'}</td></tr>`}
+  t+='</tbody></table>';
+  return`<div class="card"><div style="display:flex;align-items:center;gap:3px;margin-bottom:3px">
+    <b style="font-size:10px">${b.name}</b><span style="flex:1"></span><span style="font-size:9px;font-weight:600;color:${bc}">+${b.bonus}</span>
+    <span style="font-size:8px;color:var(--tx3)">${filled}/${b.slots}</span>
+    <button class="btn btn-d btn-sm" style="padding:0 3px;font-size:7px" onclick="clearOB('${b.id}')">🗑</button></div>${t}</div>`}
+function renderOurDef(){
+  const t1=BLDGS.filter(b=>b.tier===1),t2=BLDGS.filter(b=>b.tier===2),t2a=t2.slice(0,3),t2b=t2.slice(3),t3=[BLDGS.find(b=>b.id==='citadel')];
+  const col=(label,bldgs,sep)=>`<div${sep?' class="tsep"':''}><div class="tlbl">${label}</div>${bldgs.map(bldgCardDef).join('')}</div>`;
+  document.getElementById('tabContent').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:start">
+    ${col('T1',t1,true)}${col('T2',t2a)}${col('T2',t2b,true)}${col('T3',t3)}</div>`}
+
+// ═══ TAB 2: ATTACK RESULTS ═══
 function setSpent(pid,n){spentAttempts[pid]=n;saveLS();calcRemaining();renderScore();renderResults()}
-function toggleSlot(bid,di){
-  const k=bid+':'+di;closedSlots.has(k)?closedSlots.delete(k):closedSlots.add(k);
-  saveLS();calcRemaining();renderScore();renderResults();
-}
+function toggleSlot(bid,di){const k=bid+':'+di;closedSlots.has(k)?closedSlots.delete(k):closedSlots.add(k);saveLS();calcRemaining();renderScore();renderResults()}
 function setPlan(m){activePlan=m;renderScore();renderResults()}
 
+let atkTableOpen=true,bldgViewOpen=true;
 function renderResults(){
-  const r=result?result[activePlan]:null;
-  const curPlan=r?.plan, curPP=r?.pp;
-  if(!curPlan){
-    document.getElementById('tabContent').innerHTML=`
-      <div style="padding:30px;text-align:center;color:var(--tx3)">
-        <div style="font-size:28px;margin-bottom:8px">📊</div>
-        Enter enemy → press <b>Calculate attack</b>.</div>`;return;
-  }
+  const r=result?result[activePlan]:null;const curPlan=r?.plan,curPP=r?.pp;
+  if(!curPlan){document.getElementById('tabContent').innerHTML=`<div style="padding:20px;text-align:center;color:var(--tx3)">Enter enemy → press ⚔️ Calc</div>`;return}
   const scM=getScore(result.max.plan),scS=getScore(result.safe.plan);
-  const sc=activePlan==='safe'?scS:scM;
-  const hasFact=Object.keys(spentAttempts).length>0||closedSlots.size>0;
+  const sc=activePlan==='safe'?scS:scM;const fact=getFactPts();
   let h='';
 
   // Plan toggle
   const mR=scM.risky+scM.gambles,sR=scS.risky+scS.gambles;
-  h+=`<div class="plan-toggle">
-    <button class="btn${activePlan==='max'?' active':''}" onclick="setPlan('max')">
-      🗡 Max: <b>${scM.total}</b> pts${mR?` · ${mR} risks`:''}
-    </button>
-    <button class="btn${activePlan==='safe'?' active':''}" onclick="setPlan('safe')">
-      🛡 Safe: <b>${scS.total}</b> pts${sR?` · ${sR} risks`:''}
-    </button>
-  </div>`;
-
-  // Summary
-  const wN=sc.risky+sc.gambles;
-  h+=`<div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-    <span style="font-size:13px;font-weight:600">Attack Plan</span>
-    ${hasFact?'<span style="font-size:10px;background:var(--warnbg);color:var(--warn);padding:2px 8px;border-radius:4px">⚡ Fact data</span>':''}
+  h+=`<div style="display:flex;gap:3px;margin-bottom:6px">
+    <button class="btn btn-sm${activePlan==='max'?' btn-p':''}" onclick="setPlan('max')">🗡${scM.total}${mR?' ('+mR+'⚠)':''}</button>
+    <button class="btn btn-sm${activePlan==='safe'?' btn-p':''}" onclick="setPlan('safe')">🛡${scS.total}</button>
     <span style="flex:1"></span>
-    <span style="font-size:11px">🏴 <b style="color:var(--win)">${sc.caps}</b></span>
-    <span style="font-size:11px">Wins <b style="color:var(--win)">${sc.wins}</b>${wN?`+<b style="color:var(--warn)">${wN}⚠</b>`:''} ×${CFG.fightPts}=${sc.totalWins*CFG.fightPts}</span>
-    <span style="font-size:11px">Bonus <b style="color:var(--acc)">${sc.bonus}</b></span>
-    <span style="font-size:16px;font-weight:700;color:var(--win)">${sc.total}</span>
-    <button class="btn btn-sm" onclick="runCalc()" title="Full recalc">↻</button>
+    ${fact.closed>0?`<span style="font-size:11px;color:var(--acc)">Fact: <b>${fact.pts}</b>pts (${fact.closed}✅ ${fact.caps}🏴)</span>`:''}
+    <button class="btn btn-sm" onclick="runCalc()">↻</button>
   </div>`;
 
-  // Legend
-  h+=`<div style="display:flex;gap:8px;font-size:10px;color:var(--tx2);margin-bottom:8px;flex-wrap:wrap">
-    <span><span class="pill pw">WIN</span> ⚔️≥${CFG.heroMargin}% ⚡≥${CFG.titanMargin}%</span>
-    <span><span class="pill pw2">RISKY</span> below margin</span>
-    <span><span class="pill pw2">🎲</span> gamble</span>
-    <span>🚧 risk</span>
-  </div>`;
+  // Compact player tracking table (collapsible)
+  h+=`<div class="section"><div class="section-hdr" onclick="atkTableOpen=!atkTableOpen;renderResults()">${atkTableOpen?'▼':'▶'} Player assignments</div>`;
+  if(atkTableOpen){
+    const rows=roster.map((p,idx)=>{
+      const atks=curPP?.[p.id]||[];const spent=spentAttempts[p.id]||0;
+      const margins=atks.map(a=>a.defPow>0?Math.round((a.myPow/a.defPow-1)*100):999);
+      const minMargin=margins.length?Math.min(...margins):999;
+      return{p,idx,atks,spent,minMargin};
+    }).sort((a,b)=>a.minMargin-b.minMargin);
 
-  // BY PLAYER
-  h+=`<div style="font-size:11px;font-weight:600;color:var(--tx2);margin:4px 0">By player</div>`;
-  h+=`<div class="card" style="padding:6px 10px;margin-bottom:10px"><table><thead><tr>
-    <th style="width:18px">#</th><th>Player</th>
-    <th>Attack 1</th><th>Attack 2</th>
-    <th style="width:80px;text-align:center">Spent</th>
-    <th style="width:40px;text-align:right">Pts</th>
-  </tr></thead><tbody>`;
+    h+=`<table style="font-size:10px;margin-bottom:8px"><thead><tr>
+      <th>Player</th><th style="width:46px">Spent</th>
+      <th>Bldg</th><th style="text-align:right">Pow</th><th style="text-align:right">%</th>
+      <th style="width:1px;padding:0;border-left:2px solid var(--bd)"></th>
+      <th>Bldg</th><th style="text-align:right">Pow</th><th style="text-align:right">%</th>
+      </tr></thead><tbody>`;
+    rows.forEach(({p,idx,atks,spent})=>{
+      const fmtC=(a,n)=>{if(!a)return{bld:'<td style="color:var(--tx3)">—</td>',pow:'<td></td>',mgn:'<td></td>'};
+        const b=BLDGS.find(x=>x.id===a.bid);const cl=closedSlots.has(a.bid+':'+a.si);
+        const diff=a.myPow-a.defPow;const margin=a.defPow>0?Math.round((a.myPow/a.defPow-1)*100):0;
+        const mc=cl?'var(--win)':marginCol(margin);const bg=cl?'':marginBg(margin);
+        const st=cl?'text-decoration:line-through;opacity:.4':'';
+        return{
+          bld:`<td style="background:${bg};color:${mc};${st}">${b.name}#${a.si+1}${cl?' ✅':''}</td>`,
+          pow:`<td style="text-align:right;background:${bg};color:${mc};${st}">${a.myPow}v${a.defPow}</td>`,
+          mgn:`<td style="text-align:right;background:${bg};color:${mc};font-weight:600;${st}">${margin}%</td>`}};
+      const a1=fmtC(atks[0],1),a2=fmtC(atks[1],2);
+      const sb=[0,1,2].map(n=>`<button class="spent-btn${spent===n?' on':''}" onclick="setSpent(${p.id},${n})">${n}</button>`).join('');
+      const op=!atks.length?'opacity:.3':'';
+      h+=`<tr style="${op}">
+        <td>${esc(p.name||'?')}${p.risk?' 🚧':''}</td>
+        <td><div style="display:flex;gap:1px">${sb}</div></td>
+        ${a1.bld}${a1.pow}${a1.mgn}
+        <td style="padding:0;border-left:2px solid var(--bd)"></td>
+        ${a2.bld}${a2.pow}${a2.mgn}</tr>`});
+    h+=`</tbody></table>`}
+  h+=`</div>`; // close player assignments section
 
-  roster.forEach((p,idx)=>{
-    const atks=curPP?.[p.id]||[];
-    const pts=atks.filter(a=>a.result==='win'||a.result==='risky'||a.result==='gamble').length*CFG.fightPts;
-    const spent=spentAttempts[p.id]||0;
-    const fmtA=a=>{
-      if(!a) return'<span style="color:var(--tx3)">—</span>';
-      const b=BLDGS.find(x=>x.id===a.bid);
-      const icon=a.team==='h'?'⚔️':'⚡';
-      const e5w=a.team==='t'&&!a.e5?'⚠️':'';
-      const col=a.result==='win'?'var(--win)':'var(--warn)';
-      const cl=closedSlots.has(a.bid+':'+a.si);
-      return`<span style="color:${col};${cl?'text-decoration:line-through;opacity:.4':''}">
-        ${icon}${e5w} ${b.ru}
-        <span style="font-size:9px;color:var(--tx2)">${a.myPow}K→${a.defPow}K #${a.si+1}${cl?' ✅':''}</span></span>`;
-    };
-    const sb=[0,1,2].map(n=>`<button class="spent-btn${spent===n?' on':''}" onclick="setSpent(${p.id},${n})">${n} atk</button>`).join('');
-    const bg=p.risk?'background:var(--warnbg)':!atks.length?'opacity:.4':'';
-    h+=`<tr${bg?` style="${bg}"`:''}>
-      <td style="color:var(--tx3)">${idx+1}</td>
-      <td style="font-weight:${atks.length?'500':'400'}">${esc(p.name||'?')}${p.risk?' 🚧':''}</td>
-      <td style="padding:3px;line-height:1.4">${fmtA(atks[0])}</td>
-      <td style="padding:3px;line-height:1.4">${fmtA(atks[1])}</td>
-      <td style="text-align:center"><div style="display:flex;gap:2px;justify-content:center">${sb}</div></td>
-      <td style="text-align:right;font-weight:600;color:${pts?'var(--win)':'var(--tx3)'}">${pts||'—'}</td>
-    </tr>`;
-  });
-  h+=`</tbody></table></div>`;
-
-  // BY BUILDING
-  h+=`<div style="font-size:11px;font-weight:600;color:var(--tx2);margin:4px 0">By building</div>`;
-  [1,2,3].forEach(tier=>{
-    const gc=tier===1?'bgrid-t1':tier===2?'bgrid-t2':'bgrid-t3';
-    h+=`<div class="tlbl">Tier ${tier}</div><div class="bgrid ${gc}">`;
-    BLDGS.filter(b=>b.tier===tier).forEach(b=>{
-      const p=curPlan[b.id];
-      const cap=p?.captured,locked=p?.locked;
-      const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length||0;
-      const cC=p?.slots.filter(s=>s.result==='closed').length||0;
-      const allD=enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0);
-      const tot=allD.length;
+  // Building view (collapsible)
+  h+=`<div class="section"><div class="section-hdr" onclick="bldgViewOpen=!bldgViewOpen;renderResults()">${bldgViewOpen?'▼':'▶'} By building</div>`;
+  if(bldgViewOpen){
+    const bCard=b=>{const p=curPlan[b.id];
+      const cap=p?.captured,locked=p?.locked;const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length||0;
+      const cC=p?.slots.filter(s=>s.result==='closed').length||0;const allD=enmDef[b.id].filter(s=>s.power>0);const tot=allD.length;
       const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
-      let cc='card';
-      if(!locked){if(cap)cc+=' cap';else if(wC+cC>0&&wC+cC<tot)cc+=' part';else if(tot>0&&!wC&&!cC)cc+=' fail'}
-      h+=`<div class="${cc}" style="${locked?'opacity:.3':''}">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
-          <b style="font-size:11px">${b.ru}</b><span style="flex:1"></span>
-          <span style="font-size:10px;font-weight:600;color:${bc}">+${b.bonus}</span>`;
-      if(locked) h+=`<span style="font-size:9px">🔒</span>`;
-      else if(cap) h+=`<span class="tag" style="font-size:9px">🏴</span>`;
-      else if(wC+cC>0) h+=`<span style="font-size:9px;color:var(--warn)">${wC+cC}/${tot}</span>`;
-      else if(tot>0) h+=`<span style="font-size:9px;color:var(--lose)">0/${tot}</span>`;
-      h+=`</div><div style="font-size:9px;color:var(--tx3);margin-bottom:3px">${b.name}</div>`;
-
-      if(!locked&&allD.length){
-        h+=`<table style="font-size:10px"><thead><tr>
-          <th style="width:14px">#</th><th style="width:48px;text-align:right">Def</th>
-          <th>Attacker</th><th style="width:48px;text-align:right">Atk</th>
-          <th style="width:44px;text-align:center">✓</th>
-        </tr></thead><tbody>`;
-        allD.forEach(def=>{
-          const di=enmDef[b.id].indexOf(def);
-          const sl=p?.slots.find(s=>s.defIdx===di);
-          const pl=sl?.pid?roster.find(r=>r.id===sl.pid):null;
-          const res=sl?.result||'none';
-          const isCl=closedSlots.has(b.id+':'+di);
-          const rb=isCl?'var(--winbg)':res==='win'?'var(--winbg)':(res==='risky'||res==='gamble')?'var(--warnbg)':'';
-          const clBtn=isCl
-            ?`<button onclick="toggleSlot('${b.id}',${di})" style="font-size:9px;padding:0 5px;border-radius:3px;border:1px solid var(--win);background:var(--winbg);color:var(--win);cursor:pointer">✅</button>`
-            :res!=='none'&&res!=='closed'
-              ?`<button onclick="toggleSlot('${b.id}',${di})" style="font-size:9px;padding:0 5px;border-radius:3px;border:1px solid var(--bd);background:var(--bg);color:var(--tx3);cursor:pointer">○</button>`
-              :'<span style="color:var(--tx3)">—</span>';
-          h+=`<tr${rb?` style="background:${rb}"`:''}>
+      let cc='card';if(!locked){if(cap)cc+=' cap';else if(wC+cC>0&&wC+cC<tot)cc+=' part';else if(tot>0&&!wC&&!cC)cc+=' fail'}
+      let c=`<div class="${cc}" style="${locked?'opacity:.3':''}">
+        <div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
+          <b style="font-size:10px">${b.name}</b><span style="flex:1"></span>
+          <span style="font-size:9px;font-weight:600;color:${bc}">+${b.bonus}</span>`;
+      if(locked)c+=`<span style="font-size:8px">🔒</span>`;
+      else if(cap)c+=`<span style="font-size:8px;color:var(--win)">🏴</span>`;
+      else if(wC+cC>0)c+=`<span style="font-size:8px;color:var(--warn)">${wC+cC}/${tot}</span>`;
+      c+=`</div>`;
+      if(!locked&&allD.length){c+=`<table style="font-size:9px"><thead><tr><th>#</th><th>ATTACKER</th><th style="text-align:right">ATK vs DEF</th><th style="text-align:right">+K</th><th style="text-align:right">%</th><th>✓</th></tr></thead><tbody>`;
+        allD.forEach(def=>{const di=enmDef[b.id].indexOf(def);const sl=p?.slots.find(s=>s.defIdx===di);
+          const pl=sl?.pid?roster.find(r=>r.id===sl.pid):null;const isCl=closedSlots.has(b.id+':'+di);
+          const ne5=def.e5===false&&b.type==='titans'?'<span class="ne5">ne5</span>':'';
+          const effP=sl?sl.defPow:def.power;
+          const diff=sl&&pl?sl.myPow-effP:0;const margin=effP>0&&sl?Math.round((sl.myPow/effP-1)*100):0;
+          const bg=isCl?'var(--winbg)':sl?.result?marginBg(margin):'';
+          const mc=sl?.result?marginCol(margin):'var(--tx3)';
+          const strike=isCl?'text-decoration:line-through;opacity:.4':'';
+          const clBtn=isCl?`<span onclick="toggleSlot('${b.id}',${di})" style="cursor:pointer">✅</span>`
+            :sl?.result&&sl.result!=='none'&&sl.result!=='closed'?`<span onclick="toggleSlot('${b.id}',${di})" style="cursor:pointer;color:var(--tx3)">○</span>`:'';
+          c+=`<tr style="background:${bg};${strike}">
             <td style="color:var(--tx3)">${di+1}</td>
-            <td style="text-align:right">${def.power}K</td>
-            <td style="${pl?'font-weight:500':'color:var(--tx3)'}">${pl?esc(pl.name||'?')+(pl.risk?' 🚧':''):'—'}</td>
-            <td style="text-align:right">${sl?.myPow?sl.myPow+'K':'—'}</td>
-            <td style="text-align:center">${clBtn}</td>
-          </tr>`;
-        });
-        h+=`</tbody></table>`;
-      }else if(!locked){h+=`<div style="font-size:10px;color:var(--tx3)">Empty</div>`}
-      h+=`</div>`;
-    });
-    h+=`</div>`;
-  });
+            <td>${pl?esc(pl.name):'—'}</td>
+            <td style="text-align:right;white-space:nowrap">${pl?sl.myPow+'K vs '+effP+'K'+ne5:def.power+'K'+ne5}</td>
+            <td style="text-align:right;color:${mc}">${pl?'+'+diff+'K':''}</td>
+            <td style="text-align:right;color:${mc};font-weight:600">${pl?margin+'%':''}</td>
+            <td style="text-align:center">${clBtn}</td></tr>`});
+        c+=`</tbody></table>`}
+      return c+`</div>`};
+    const t1=BLDGS.filter(b=>b.tier===1),t2=BLDGS.filter(b=>b.tier===2),t2a=t2.slice(0,3),t2b=t2.slice(3),t3=[BLDGS.find(b=>b.id==='citadel')];
+    const col=(label,bldgs,sep)=>`<div${sep?' class="tsep"':''}><div class="tlbl">${label}</div>${bldgs.map(bCard).join('')}</div>`;
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:start">
+      ${col('T1',t1,true)}${col('T2',t2a)}${col('T2',t2b,true)}${col('T3',t3)}</div>`}
+  h+=`</div>`; // close building section
+  document.getElementById('tabContent').innerHTML=h}
 
-  // Unassigned
-  const usedP=new Set();
-  BLDGS.forEach(b=>curPlan[b.id]?.slots.forEach(s=>{if(s.pid)usedP.add(s.pid)}));
-  const ds2=defSet();
-  const free=roster.filter(p=>!usedP.has(p.id)&&((!ds2.has('h_'+p.id)&&p.hPow>0)||(!ds2.has('t_'+p.id)&&p.tPow>0)));
-  if(free.length){
-    h+=`<div style="margin-top:8px;font-size:11px;font-weight:600;color:var(--tx2)">Unassigned (${free.length})</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
-    free.forEach(p=>{
-      h+=`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--bg2);border:1px solid var(--bd)">
-        ${p.hPow?'⚔️'+p.hPow+'K ':''} ${p.tPow?'⚡'+p.tPow+'K ':''} ${esc(p.name||'?')}${p.risk?' 🚧':''}
-      </span>`;
-    });h+=`</div>`;
-  }
-
-  // Copy-paste
-  h+=`<div style="margin-top:10px;display:flex;align-items:center;gap:6px">
-    <span style="font-size:11px;font-weight:600;color:var(--tx2)">Copy-paste</span>
-    <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('cpBox').textContent).then(()=>this.textContent='✓').catch(()=>{})">📋</button>
-  </div>`;
-  h+=`<div class="cbox" id="cpBox">${buildSummary(curPlan,curPP)}</div>`;
-  document.getElementById('tabContent').innerHTML=h;
-}
-
-function buildSummary(plan,pp){
-  if(!plan) return'(no plan)';
-  const sc=getScore(plan);
-  const L=[`Attack Plan — ${sc.total} pts (${sc.totalWins}×${CFG.fightPts}+${sc.bonus}bonus, 🏴${sc.caps})`,''];
-  L.push('BY PLAYER:');
-  roster.forEach(p=>{
-    const a=pp[p.id]||[];if(!a.length)return;
-    const f=x=>{const b=BLDGS.find(v=>v.id===x.bid);
-      return`${b.ru}(${x.team==='h'?'⚔':'⚡'}) ${x.myPow}K>${x.defPow}K #${x.si+1}${x.result==='gamble'?' 🎲':x.result==='risky'?' ⚠':''}`};
-    L.push(`  ${p.name}${p.risk?' 🚧':''}: ${a.map(f).join(' | ')}`);
-  });
-  L.push('');L.push('BY BUILDING:');
-  BLDGS.forEach(b=>{
-    const p=plan[b.id];if(!p||p.locked)return;
-    const d=enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0);
-    if(!d.length)return;
-    L.push(`${b.ru}${p.captured?' 🏴':''}:`);
-    d.forEach(def=>{
-      const di=enmDef[b.id].indexOf(def);
-      const sl=p.slots.find(s=>s.defIdx===di);
-      const pl=sl?.pid?roster.find(r=>r.id===sl.pid):null;
-      L.push(`  #${di+1} ${def.power}K: ${pl?pl.name:'—'} → ${sl?.result||'none'}`);
-    });
-  });
-  return L.join('\n');
-}
-
-// ═══════════════════════════════════════════════
-// EXPORT / IMPORT / RESET
-// ═══════════════════════════════════════════════
+// ═══ EXPORT / IMPORT / RESET ═══
 function doExport(){
-  // Export DATA only — CFG settings are local preferences, not data
-  const data={v:5,roster,ourDef,enmDef,spentAttempts,closedSlots:Array.from(closedSlots),nextId};
-  const a=document.createElement('a');
-  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,2));
-  a.download='gw_'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-}
-function doImport(e){
-  const file=e.target.files[0];if(!file)return;
-  const r=new FileReader();
-  r.onload=function(ev){
-    try{
-      const d=JSON.parse(ev.target.result);
-      if(d.roster) roster=d.roster.map(p=>({
-        ...p,hPow:parseFloat(p.hPow)||0,tPow:parseFloat(p.tPow)||0,
-        e5:p.e5!==undefined?p.e5:true,risk:p.risk||false
-      }));
-      if(d.nextId) nextId=d.nextId;
-      if(d.ourDef) BLDGS.forEach(b=>{if(d.ourDef[b.id])ourDef[b.id]=d.ourDef[b.id]});
-      if(d.enmDef) BLDGS.forEach(b=>{
-        if(d.enmDef[b.id]){
-          enmDef[b.id]=d.enmDef[b.id].map(s=>({
-            power:parseFloat(s.power)||0,e5:s.e5!==undefined?s.e5:true
-          }));
-          while(enmDef[b.id].length<b.slots) enmDef[b.id].push({power:0,e5:true});
-        }
-      });
-      if(d.spentAttempts) spentAttempts=d.spentAttempts;else spentAttempts={};
-      if(d.closedSlots) closedSlots=new Set(d.closedSlots);else closedSlots=new Set();
-      // Import old format settings if present (for backwards compat)
-      if(d.fightPts) CFG.fightPts=d.fightPts;
-      if(d.titanBoost!==undefined) CFG.titanBoost=d.titanBoost;
-      if(d.titanPenalty!==undefined) CFG.titanPenalty=d.titanPenalty;
-      result=null;syncSettings();renderAll();alert('✓ Loaded!');
-    }catch(err){alert('Error: '+err.message)}
-  };
-  r.readAsText(file);e.target.value='';
-}
-function resetWar(){
-  if(!confirm('Clear defense and attack? Roster kept.'))return;
-  BLDGS.forEach(b=>{
-    ourDef[b.id]=Array(b.slots).fill(null);
-    enmDef[b.id]=Array.from({length:b.slots},()=>({power:0,e5:true}));
-  });
-  result=null;spentAttempts={};closedSlots=new Set();renderAll();
-}
+  const data={v:6,roster,ourDef,enmDef,cfg:CFG,spentAttempts,closedSlots:Array.from(closedSlots),nextId};
+  const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,2));
+  a.download='gw_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a)}
 
-// ═══════════════════════════════════════════════
-// LOCALSTORAGE
-// ═══════════════════════════════════════════════
-const LS='gwp_v5';
-function saveLS(){
-  try{localStorage.setItem(LS,JSON.stringify({
-    v:5,roster,ourDef,enmDef,spentAttempts,closedSlots:Array.from(closedSlots),nextId,
-    cfg:CFG // settings saved locally only
-  }))}catch(e){}
-}
-function loadLS(){
-  try{
-    let raw=localStorage.getItem(LS);
-    // v4 fallback
-    if(!raw){
-      raw=localStorage.getItem('gwp_v4');
-      if(!raw) return false;
-    }
-    const d=JSON.parse(raw);
-    if(d.roster) roster=d.roster.map(p=>({
-      ...p,hPow:parseFloat(p.hPow)||0,tPow:parseFloat(p.tPow)||0,
-      e5:p.e5!==undefined?p.e5:true,risk:p.risk||false
-    }));
-    if(d.nextId) nextId=d.nextId;
-    if(d.ourDef) BLDGS.forEach(b=>{if(d.ourDef[b.id])ourDef[b.id]=d.ourDef[b.id]});
-    if(d.enmDef) BLDGS.forEach(b=>{
-      if(d.enmDef[b.id]){
-        enmDef[b.id]=d.enmDef[b.id].map(s=>({
-          power:parseFloat(s.power)||0,e5:s.e5!==undefined?s.e5:true
-        }));
-        while(enmDef[b.id].length<b.slots) enmDef[b.id].push({power:0,e5:true});
-      }
-    });
-    if(d.spentAttempts) spentAttempts=d.spentAttempts;
-    if(d.closedSlots) closedSlots=new Set(d.closedSlots);
-    // Settings
+function doImport(e){const file=e.target.files[0];if(!file)return;const r=new FileReader();
+  r.onload=function(ev){try{const d=JSON.parse(ev.target.result);
+    if(d.roster)roster=d.roster.map(p=>({...p,hPow:parseFloat(p.hPow)||0,tPow:parseFloat(p.tPow)||0,e5:p.e5!==undefined?p.e5:true,risk:p.risk||false}));
+    if(d.nextId)nextId=d.nextId;
+    if(d.ourDef)BLDGS.forEach(b=>{if(d.ourDef[b.id])ourDef[b.id]=d.ourDef[b.id]});
+    if(d.enmDef)BLDGS.forEach(b=>{if(d.enmDef[b.id]){enmDef[b.id]=d.enmDef[b.id].map(s=>({power:parseFloat(s.power)||0,e5:s.e5!==undefined?s.e5:true}));
+      while(enmDef[b.id].length<b.slots)enmDef[b.id].push({power:0,e5:true})}});
+    // Load settings from export
     const c=d.cfg||d;
-    if(c.fightPts) CFG.fightPts=c.fightPts;
-    if(c.titanBoost!==undefined) CFG.titanBoost=c.titanBoost;
-    if(c.titanPenalty!==undefined) CFG.titanPenalty=c.titanPenalty;
-    if(c.heroMargin!==undefined) CFG.heroMargin=c.heroMargin;
-    if(c.titanMargin!==undefined) CFG.titanMargin=c.titanMargin;
-    if(c.winMargin!==undefined&&c.heroMargin===undefined) CFG.heroMargin=c.winMargin; // migrate old
-    if(c.ghostInsurance!==undefined) CFG.ghostInsurance=c.ghostInsurance;
-    return true;
-  }catch(e){return false}
-}
+    if(c.fightPts!==undefined)CFG.fightPts=c.fightPts;
+    if(c.titanBoost!==undefined)CFG.titanBoost=c.titanBoost;
+    if(c.titanPenalty!==undefined)CFG.titanPenalty=c.titanPenalty;
+    if(c.heroMargin!==undefined)CFG.heroMargin=c.heroMargin;
+    else if(c.winMargin!==undefined)CFG.heroMargin=c.winMargin;
+    else CFG.heroMargin=20; // default for v4 without margins
+    if(c.titanMargin!==undefined)CFG.titanMargin=c.titanMargin;
+    else CFG.titanMargin=5; // default for v4
+    if(c.ghostInsurance!==undefined)CFG.ghostInsurance=c.ghostInsurance;
+    if(c.ghostBridge!==undefined&&c.ghostInsurance===undefined)CFG.ghostInsurance=c.ghostBridge; // v4 migrate
+    if(d.spentAttempts)spentAttempts=d.spentAttempts;else spentAttempts={};
+    if(d.closedSlots)closedSlots=new Set(d.closedSlots);else closedSlots=new Set();
+    result=null;syncSettings();renderAll();alert('✓');}catch(err){alert('Error: '+err.message)}};
+  r.readAsText(file);e.target.value=''}
 
-// ═══════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════
-function updateButtons(){
-  const hasP=roster.length>0;
-  const hasE=BLDGS.some(b=>enmDef[b.id].some(s=>(parseFloat(s.power)||0)>0));
-  const db=document.getElementById('defBtn'),ab=document.getElementById('atkBtn');
-  if(db) db.disabled=!hasP;if(ab) ab.disabled=!hasE;
-}
-function syncSettings(){
-  document.getElementById('fptInp').value=CFG.fightPts;
-  document.getElementById('boostInp').value=CFG.titanBoost;
-  document.getElementById('penaltyInp').value=CFG.titanPenalty;
-  document.getElementById('hMarginInp').value=CFG.heroMargin;
-  document.getElementById('tMarginInp').value=CFG.titanMargin;
-  document.getElementById('ghostInsInp').checked=CFG.ghostInsurance;
-}
+function resetWar(){if(!confirm('Clear all?'))return;BLDGS.forEach(b=>{ourDef[b.id]=Array(b.slots).fill(null);
+  enmDef[b.id]=Array.from({length:b.slots},()=>({power:0,e5:true}))});result=null;spentAttempts={};closedSlots=new Set();renderAll()}
+
+// ═══ LOCALSTORAGE ═══
+const LS='gwp_v6';
+function saveLS(){try{localStorage.setItem(LS,JSON.stringify({v:6,roster,ourDef,enmDef,cfg:CFG,spentAttempts,closedSlots:Array.from(closedSlots),nextId}))}catch(e){}}
+function loadLS(){try{
+  let raw=localStorage.getItem(LS);if(!raw){raw=localStorage.getItem('gwp_v5');if(!raw){raw=localStorage.getItem('gwp_v4')}}
+  if(!raw)return false;const d=JSON.parse(raw);
+  if(d.roster)roster=d.roster.map(p=>({...p,hPow:parseFloat(p.hPow)||0,tPow:parseFloat(p.tPow)||0,e5:p.e5!==undefined?p.e5:true,risk:p.risk||false}));
+  if(d.nextId)nextId=d.nextId;
+  if(d.ourDef)BLDGS.forEach(b=>{if(d.ourDef[b.id])ourDef[b.id]=d.ourDef[b.id]});
+  if(d.enmDef)BLDGS.forEach(b=>{if(d.enmDef[b.id]){enmDef[b.id]=d.enmDef[b.id].map(s=>({power:parseFloat(s.power)||0,e5:s.e5!==undefined?s.e5:true}));
+    while(enmDef[b.id].length<b.slots)enmDef[b.id].push({power:0,e5:true})}});
+  const c=d.cfg||d;
+  if(c.fightPts!==undefined)CFG.fightPts=c.fightPts;
+  if(c.titanBoost!==undefined)CFG.titanBoost=c.titanBoost;
+  if(c.titanPenalty!==undefined)CFG.titanPenalty=c.titanPenalty;
+  if(c.heroMargin!==undefined)CFG.heroMargin=c.heroMargin;
+  else if(c.winMargin!==undefined)CFG.heroMargin=c.winMargin;
+  else CFG.heroMargin=20;
+  if(c.titanMargin!==undefined)CFG.titanMargin=c.titanMargin;
+  else CFG.titanMargin=5;
+  if(c.ghostInsurance!==undefined)CFG.ghostInsurance=c.ghostInsurance;
+  if(c.ghostBridge!==undefined&&c.ghostInsurance===undefined)CFG.ghostInsurance=c.ghostBridge; // v4
+  if(d.spentAttempts)spentAttempts=d.spentAttempts;
+  if(d.closedSlots)closedSlots=new Set(d.closedSlots);
+  return true}catch(e){return false}}
+
+// ═══ INIT ═══
+function updateButtons(){const hasP=roster.length>0;const hasE=BLDGS.some(b=>enmDef[b.id].some(s=>s.power>0));
+  const db=document.getElementById('defBtn'),ab=document.getElementById('atkBtn');if(db)db.disabled=!hasP;if(ab)ab.disabled=!hasE}
+function syncSettings(){document.getElementById('fptInp').value=CFG.fightPts;document.getElementById('boostInp').value=CFG.titanBoost;
+  document.getElementById('penaltyInp').value=CFG.titanPenalty;document.getElementById('hMarginInp').value=CFG.heroMargin;
+  document.getElementById('tMarginInp').value=CFG.titanMargin;document.getElementById('ghostInsInp').checked=CFG.ghostInsurance}
 function renderAll(){renderScore();renderRoster();renderTab(activeTab);updateButtons();saveLS()}
 
 const _ok=loadLS();syncSettings();renderAll();
-if(_ok){
-  const i=document.createElement('div');
-  i.style.cssText='position:fixed;bottom:12px;right:12px;background:var(--winbg);color:var(--win);font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(46,204,113,.3);z-index:99;pointer-events:none';
-  i.textContent='✓ Data restored';
-  document.body.appendChild(i);setTimeout(()=>i.remove(),2000);
-}
+if(_ok){const i=document.createElement('div');i.style.cssText='position:fixed;bottom:10px;right:10px;background:var(--winbg);color:var(--win);font-size:10px;padding:3px 8px;border-radius:5px;z-index:99;pointer-events:none';
+  i.textContent='✓ restored';document.body.appendChild(i);setTimeout(()=>i.remove(),1500)}
 </script>
 </body>
 </html>
