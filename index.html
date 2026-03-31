@@ -222,79 +222,128 @@ function getFactPts(){
   return{pts,closed:[...closedSlots].length,caps};
 }
 
-// ═══ ATTACK OPTIMIZER ═══
-// Phase 1: Capture plan enumeration
-// Phase 2: R1 hero(1/player,strongest) → R2 titan(weakest) → R3 hero2nd → R4 titan2nd
-// Phase 3: Swap optimization
+// ═══ ATTACK OPTIMIZER v4 ═══
+// Phase 1: Capture plan (2^10 enum, simple greedy checkFeas)
+// Phase 2: R1 capHero → R2 capTitan → R3 exHero → R4 exTitan → R5 lastResort
+// Phase 3: Swap optimization (risk reduction + same-building consolidation)
 function calcAtk(mode, preSpent, preClosed){
-  function defEP(slot,tt){const base=parseFloat(slot.power)||0;if(tt!=='t'||slot.e5===false)return base;return Math.round(base*(1+CFG.titanBoost/100))}
-  function atkEP(p,tt,gamble){if(tt==='h')return p.hPow||0;const base=p.tPow||0;if(!base)return 0;if(p.e5===false)return Math.round(base*(1-CFG.titanPenalty/100));return gamble?Math.round(base*(1+CFG.titanBoost/100)):base}
+  // FIX 0: non-E5 enemy titan = антибуст (penalty), NOT raw
+  function defEP(slot,tt){
+    const base=parseFloat(slot.power)||0;
+    if(tt!=='t') return base;
+    if(slot.e5===false) return Math.round(base*(1-CFG.titanPenalty/100));
+    return Math.round(base*(1+CFG.titanBoost/100));
+  }
+  function atkEP(p,tt){
+    if(tt==='h') return p.hPow||0;
+    const base=p.tPow||0;if(!base)return 0;
+    if(p.e5===false) return Math.round(base*(1-CFG.titanPenalty/100));
+    return Math.round(base*(1+CFG.titanBoost/100)); // E5 always boosted (symmetric with defEP)
+  }
   function canBeat(p,defPow,tt){
-    // Non-E5 titans: skip titan slots entirely (handled later as last resort)
     if(tt==='t'&&p.e5===false&&!p._lastResort) return null;
     const margin=tt==='h'?CFG.heroMargin:CFG.titanMargin;
-    const pow=atkEP(p,tt,false);
-    if(pow>defPow){const rel=pow>=defPow*(1+margin/100);if(mode==='safe'&&!rel){}else return{gamble:false,pow,result:rel?'win':'risky'}}
-    if(tt==='t'&&p.e5!==false){const gp=atkEP(p,tt,true);if(gp>defPow){if(mode==='safe')return null;return{gamble:true,pow:gp,result:'gamble'}}}
+    const pow=atkEP(p,tt);
+    if(pow>defPow){
+      const rel=pow>=defPow*(1+margin/100);
+      if(mode==='safe'&&!rel) return null;
+      return{gamble:false,pow,result:rel?'win':'risky'};
+    }
     return null;
   }
   const atkLeft={};roster.forEach(p=>atkLeft[p.id]=MAX_ATK-(preSpent?.[p.id]||0));
   const closedSet=new Set();if(preClosed)preClosed.forEach(k=>closedSet.add(k));
   const openSlots={};BLDGS.forEach(b=>{const tt=b.type==='titans'?'t':'h';openSlots[b.id]=[];
-    enmDef[b.id].forEach((s,i)=>{if(!s.power||closedSet.has(b.id+':'+i))return;openSlots[b.id].push({bid:b.id,defIdx:i,tt,effPow:defEP(s,tt)})})});
+    enmDef[b.id].forEach((s,i)=>{if(!s.power||closedSet.has(b.id+':'+i))return;
+      openSlots[b.id].push({bid:b.id,defIdx:i,tt,effPow:defEP(s,tt)})})});
 
   // Phase 1: Capture plan
   const bids=BLDGS.map(b=>b.id);
   function isT2U(cs){return cs.has('bridge')||GHOST_REQ.every(id=>cs.has(id))}
   function isCitU(cs){return CIT_UNLOCK.some(id=>cs.has(id))}
-  function isValid(cs){for(const id of cs){const b=BLDGS.find(x=>x.id===id);if(b.tier===2&&!isT2U(cs))return false;if(b.tier===3&&!isCitU(cs))return false}
-    if(CFG.ghostInsurance){const has2=[...cs].some(id=>{const b=BLDGS.find(x=>x.id===id);return b.tier>=2});if(has2&&!GHOST_REQ.every(id=>cs.has(id)))return false}return true}
+  function isValid(cs){
+    for(const id of cs){const b=BLDGS.find(x=>x.id===id);
+      if(b.tier===2&&!isT2U(cs))return false;if(b.tier===3&&!isCitU(cs))return false}
+    if(CFG.ghostInsurance){const has2=[...cs].some(id=>{const b=BLDGS.find(x=>x.id===id);return b.tier>=2});
+      if(has2&&!GHOST_REQ.every(id=>cs.has(id)))return false}
+    return true;
+  }
+  // checkFeas: simple greedy, capture first then extras
   function checkFeas(capSet){
-    const needed=[],extra=[];for(const bid of capSet)for(const s of openSlots[bid])needed.push(s);
-    BLDGS.forEach(b=>{if(capSet.has(b.id))return;if(b.tier===2&&!isT2U(capSet))return;if(b.tier===3&&!isCitU(capSet))return;for(const s of openSlots[b.id])extra.push(s)});
+    const needed=[],extra=[];
+    for(const bid of capSet)for(const s of openSlots[bid])needed.push({...s});
+    BLDGS.forEach(b=>{if(capSet.has(b.id))return;if(b.tier===2&&!isT2U(capSet))return;if(b.tier===3&&!isCitU(capSet))return;
+      for(const s of openSlots[b.id])extra.push({...s})});
     const pac={};roster.forEach(p=>pac[p.id]=0);
     needed.forEach(s=>{s._c=roster.filter(p=>atkLeft[p.id]-pac[p.id]>0&&canBeat(p,s.effPow,s.tt)).length});
-    needed.sort((a,b)=>a._c-b._c);let wins=0;
-    for(const s of needed){const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt))
-      .map(p=>({p,b:canBeat(p,s.effPow,s.tt)})).filter(c=>c.b).sort((a,b)=>a.b.pow-b.b.pow);
-      if(!cs.length)return null;pac[cs[0].p.id]++;wins++}
+    needed.sort((a,b)=>a._c-b._c);
+    for(const s of needed){
+      const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt))
+        .map(p=>({p,b:canBeat(p,s.effPow,s.tt)})).filter(c=>c.b);
+      cs.sort((a,b)=>a.b.pow-b.b.pow); // weakest sufficient for feasibility check
+      if(!cs.length)return null;
+      pac[cs[0].p.id]++}
+    let wins=needed.length;
     extra.sort((a,b)=>b.effPow-a.effPow);
-    for(const s of extra){const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt));
-      if(!cs.length)continue;cs.sort((a,b)=>atkEP(a,s.tt,false)-atkEP(b,s.tt,false));pac[cs[0].id]++;wins++}
+    for(const s of extra){
+      const cs=roster.filter(p=>(atkLeft[p.id]-pac[p.id])>0&&canBeat(p,s.effPow,s.tt));
+      if(!cs.length)continue;
+      cs.sort((a,b)=>atkEP(a,s.tt)-atkEP(b,s.tt)); // weakest sufficient
+      pac[cs[0].id]++;wins++}
     let bonus=0;for(const bid of capSet)bonus+=BLDGS.find(b=>b.id===bid).bonus;
     BLDGS.forEach(b=>{if(capSet.has(b.id))return;if(b.tier===2&&!isT2U(capSet))return;if(b.tier===3&&!isCitU(capSet))return;
       const allD=enmDef[b.id].filter(s=>s.power>0);if(allD.every((s,i)=>closedSet.has(b.id+':'+i))||!allD.length)bonus+=b.bonus});
-    return{wins,bonus,score:wins*CFG.fightPts+bonus}}
-  let bestCapSet=null,bestScore=-1;
-  for(let mask=0;mask<(1<<BLDGS.length);mask++){const cs=new Set();for(let i=0;i<BLDGS.length;i++)if(mask&(1<<i))cs.add(bids[i]);
-    if(!isValid(cs))continue;const r=checkFeas(cs);if(r&&r.score>bestScore){bestScore=r.score;bestCapSet=new Set(cs)}}
+    return{wins,bonus,score:wins*CFG.fightPts+bonus};
+  }
+  const mustCapture=new Set();
+  BLDGS.forEach(b=>{if(enmDef[b.id].some((s,i)=>closedSet.has(b.id+':'+i)))mustCapture.add(b.id)});
+  function stratValue(cs){let v=0;CIT_UNLOCK.forEach(id=>{if(cs.has(id))v+=3});GHOST_REQ.forEach(id=>{if(cs.has(id))v+=2});
+    if(cs.has('bridge'))v+=2;if(cs.has('citadel'))v+=5;return v}
+  let bestCapSet=null,bestScore=-1,bestStrat=-1;
+  for(let mask=0;mask<(1<<BLDGS.length);mask++){
+    const cs=new Set();for(let i=0;i<BLDGS.length;i++)if(mask&(1<<i))cs.add(bids[i]);
+    let skip=false;for(const mc of mustCapture)if(!cs.has(mc)){skip=true;break}
+    if(skip)continue;if(!isValid(cs))continue;
+    const r=checkFeas(cs);if(!r)continue;const sv=stratValue(cs);
+    if(r.score>bestScore||(r.score===bestScore&&sv>bestStrat)){bestScore=r.score;bestCapSet=new Set(cs);bestStrat=sv}}
   if(!bestCapSet)bestCapSet=new Set();
 
-  // Phase 2: Execute
+  // Phase 2: Assignment R1→R2→R3→R4→R5
   const plan={},pp={};roster.forEach(p=>pp[p.id]=[]);
   BLDGS.forEach(b=>plan[b.id]={slots:[],captured:false,bonus:0,locked:true});
   closedSet.forEach(k=>{const[bid,idx]=k.split(':');if(plan[bid])plan[bid].slots.push({defIdx:parseInt(idx),pid:null,result:'closed'})});
-  BLDGS.forEach(b=>{if(b.tier===1)plan[b.id].locked=false;else if(b.tier===2&&isT2U(bestCapSet))plan[b.id].locked=false;else if(b.tier===3&&isCitU(bestCapSet))plan[b.id].locked=false});
+  BLDGS.forEach(b=>{if(b.tier===1)plan[b.id].locked=false;
+    else if(b.tier===2&&isT2U(bestCapSet))plan[b.id].locked=false;
+    else if(b.tier===3&&isCitU(bestCapSet))plan[b.id].locked=false});
   const PAC={};roster.forEach(p=>PAC[p.id]=preSpent?.[p.id]||0);
   const assigned=new Set();
-  function assignSlot(slot,p,beat){PAC[p.id]++;const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,result:beat.result,gamble:beat.gamble,myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
+  function assignSlot(slot,p,beat){PAC[p.id]++;
+    const a={defIdx:slot.defIdx,pid:p.id,team:slot.tt,result:beat.result,gamble:beat.gamble,myPow:beat.pow,defPow:slot.effPow,e5:p.e5!==false};
     plan[slot.bid].slots.push(a);pp[p.id].push({bid:slot.bid,si:slot.defIdx,...a});assigned.add(slot.bid+':'+slot.defIdx)}
   function checkCaps(){BLDGS.forEach(b=>{if(plan[b.id].locked)return;const allD=enmDef[b.id].filter(s=>s.power>0);
     if(!allD.length){plan[b.id].captured=true;plan[b.id].bonus=b.bonus;return}
     const cov=new Set(plan[b.id].slots.filter(s=>s.result&&s.result!=='none').map(s=>s.defIdx));
     plan[b.id].captured=enmDef[b.id].every((s,i)=>!s.power||cov.has(i));plan[b.id].bonus=plan[b.id].captured?b.bonus:0})}
 
-  const heroSlots=[],titanSlots=[];
-  BLDGS.forEach(b=>{if(plan[b.id].locked)return;for(const s of openSlots[b.id]){if(s.tt==='h')heroSlots.push(s);else titanSlots.push(s)}});
+  const capH=[],capT=[],exH=[],exT=[];
+  BLDGS.forEach(b=>{if(plan[b.id].locked)return;const isCap=bestCapSet.has(b.id);
+    for(const s of openSlots[b.id]){
+      if(isCap){if(s.tt==='h')capH.push(s);else capT.push(s)}
+      else{if(s.tt==='h')exH.push(s);else exT.push(s)}}});
+  // Titan-critical: players who are sole/rare candidate for capture titan slots → protect from R1
+  const titanCritical=new Set();
+  capT.forEach(s=>{const cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&canBeat(p,s.effPow,s.tt));
+    if(cands.length<=2) cands.forEach(p=>titanCritical.add(p.id))});
 
-  function runPhase(slots,sortFn,filterFn){
+  function assignRound(slots,sortFn,filterFn){
     for(let iter=0;iter<slots.length*2;iter++){
       slots.forEach(s=>{if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
-        s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&filterFn(p)&&canBeat(p,s.effPow,s.tt)).length});
-      let bs=null,bc=Infinity;for(const s of slots){if(assigned.has(s.bid+':'+s.defIdx))continue;
+        s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&(filterFn?filterFn(p):true)&&canBeat(p,s.effPow,s.tt)).length});
+      let bs=null,bc=Infinity;
+      for(const s of slots){if(assigned.has(s.bid+':'+s.defIdx))continue;
         if(s.cands>0&&(s.cands<bc||(s.cands===bc&&bs&&s.effPow>bs.effPow))){bc=s.cands;bs=s}}
       if(!bs)break;
-      const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&filterFn(p)&&canBeat(p,bs.effPow,bs.tt))
+      const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&(filterFn?filterFn(p):true)&&canBeat(p,bs.effPow,bs.tt))
         .map(p=>{const beat=canBeat(p,bs.effPow,bs.tt);
           const rq=beat.result==='win'?0:beat.result==='risky'?1:2;
           return{p,beat,waste:beat.pow-bs.effPow,sb:pp[p.id].some(a=>a.bid===bs.bid)?1:0,rq}}).filter(c=>c.beat);
@@ -304,54 +353,63 @@ function calcAtk(mode, preSpent, preClosed){
       if(isCrit&&pick.p.risk&&cs.length>1){const nr=cs.find(c=>!c.p.risk);if(nr)pick=nr}
       assignSlot(bs,pick.p,pick.beat);
     }}
-
-  // R1: Top-half hero players (by hPow), 1 attack each, strongest on scarcest hero slot
-  const heroRanked=[...roster].filter(p=>PAC[p.id]<MAX_ATK).sort((a,b)=>b.hPow-a.hPow);
-  const topHalf=new Set(heroRanked.slice(0,Math.ceil(heroRanked.length/2)).map(p=>p.id));
-  const r1used=new Set();
-  for(let iter=0;iter<heroSlots.length;iter++){
-    heroSlots.forEach(s=>{if(assigned.has(s.bid+':'+s.defIdx)){s.cands=999;return}
-      s.cands=roster.filter(p=>PAC[p.id]<MAX_ATK&&topHalf.has(p.id)&&!r1used.has(p.id)&&canBeat(p,s.effPow,'h')).length});
-    let bs=null,bc=Infinity;for(const s of heroSlots){if(assigned.has(s.bid+':'+s.defIdx))continue;
-      if(s.cands>0&&(s.cands<bc||(s.cands===bc&&bs&&s.effPow>bs.effPow))){bc=s.cands;bs=s}}
-    if(!bs)break;
-    const cs=roster.filter(p=>PAC[p.id]<MAX_ATK&&topHalf.has(p.id)&&!r1used.has(p.id)&&canBeat(p,bs.effPow,'h'))
-      .map(p=>({p,beat:canBeat(p,bs.effPow,'h')})).filter(c=>c.beat).sort((a,b)=>b.beat.pow-a.beat.pow);
-    if(!cs.length)continue;
-    assignSlot(bs,cs[0].p,cs[0].beat);r1used.add(cs[0].p.id)}
-
-  // R2: Titan slots — weakest sufficient, same-building preference
-  runPhase(titanSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
-  // R3: Remaining hero slots — 2nd hero attacks, strongest
-  runPhase(heroSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||b.beat.pow-a.beat.pow),p=>true);
-  // R4: Remaining titan slots
-  runPhase(titanSlots,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
-
-  // Last resort: non-E5 on remaining titan slots
-  const unassignedT=titanSlots.filter(s=>!assigned.has(s.bid+':'+s.defIdx));
-  if(unassignedT.length){
-    roster.forEach(p=>p._lastResort=true);
-    runPhase(unassignedT,cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste),p=>true);
-    roster.forEach(p=>delete p._lastResort);
-  }
+  // Hero: strongest first (guarantees capture). Titan: weakest sufficient.
+  // Swap phase evens out margins after all slots filled.
+  const heroSort=cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||b.beat.pow-a.beat.pow);
+  const titanSort=cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste);
+  // R1: Capture hero slots — strongest, skip titan-critical
+  assignRound(capH, heroSort, p=>!titanCritical.has(p.id));
+  // R1b: Fill remaining capture hero slots (allow titan-critical if needed)
+  assignRound(capH, heroSort, null);
+  // R2: Capture titan slots — weakest sufficient
+  assignRound(capT, titanSort, null);
+  // R3: Extra hero slots
+  assignRound(exH, heroSort, null);
+  // R4: Extra titan slots
+  assignRound(exT, titanSort, null);
+  // R5: Last resort non-E5 on titan
+  const leftT=[...capT,...exT].filter(s=>!assigned.has(s.bid+':'+s.defIdx));
+  if(leftT.length){roster.forEach(p=>p._lastResort=true);assignRound(leftT,titanSort,null);roster.forEach(p=>delete p._lastResort)}
   checkCaps();
 
-  // Phase 3: Swap
-  for(let it=0;it<10;it++){let imp=false;const aa=[];
-    BLDGS.forEach(b=>{if(plan[b.id].locked)return;plan[b.id].slots.filter(s=>s.pid&&s.result!=='closed').forEach(s=>aa.push({bid:b.id,s}))});
+  // Phase 3: Swap (reduce risk + consolidate same-building)
+  for(let it=0;it<20;it++){
+    let imp=false;const aa=[];
+    BLDGS.forEach(b=>{if(plan[b.id].locked)return;
+      plan[b.id].slots.filter(s=>s.pid&&s.result!=='closed').forEach(s=>aa.push({bid:b.id,s}))});
     for(let i=0;i<aa.length;i++)for(let j=i+1;j<aa.length;j++){
       const{bid:b1,s:s1}=aa[i],{bid:b2,s:s2}=aa[j];
-      const t1=BLDGS.find(x=>x.id===b1).type==='titans'?'t':'h',t2=BLDGS.find(x=>x.id===b2).type==='titans'?'t':'h';
+      const t1=BLDGS.find(x=>x.id===b1).type==='titans'?'t':'h';
+      const t2=BLDGS.find(x=>x.id===b2).type==='titans'?'t':'h';
       if(t1!==t2||s1.pid===s2.pid)continue;
       const p1=roster.find(r=>r.id===s1.pid),p2=roster.find(r=>r.id===s2.pid);if(!p1||!p2)continue;
-      const a=canBeat(p1,s2.defPow,t2),b=canBeat(p2,s1.defPow,t1);if(!a||!b)continue;
-      if((a.result!=='win'?1:0)+(b.result!=='win'?1:0)<(s1.result!=='win'?1:0)+(s2.result!=='win'?1:0)){
-        s1.pid=p2.id;s1.result=b.result;s1.gamble=b.gamble;s1.myPow=b.pow;s1.e5=p2.e5!==false;
+      const a=canBeat(p1,s2.defPow,t2),b2on1=canBeat(p2,s1.defPow,t1);if(!a||!b2on1)continue;
+      const oldRisk=(s1.result!=='win'?1:0)+(s2.result!=='win'?1:0);
+      const newRisk=(b2on1.result!=='win'?1:0)+(a.result!=='win'?1:0);
+      const p1oB2=pp[p1.id].filter(x=>x.bid===b2&&x.si!==s1.defIdx).length;
+      const p2oB1=pp[p2.id].filter(x=>x.bid===b1&&x.si!==s2.defIdx).length;
+      const p1oB1=pp[p1.id].filter(x=>x.bid===b1&&x.si!==s1.defIdx).length;
+      const p2oB2=pp[p2.id].filter(x=>x.bid===b2&&x.si!==s2.defIdx).length;
+      const oldSB=(p1oB1>0?1:0)+(p2oB2>0?1:0);
+      const newSB=(p1oB2>0?1:0)+(p2oB1>0?1:0);
+      // Margin evening: reduce max margin% of the pair
+      const oldMax=Math.max(s1.defPow>0?(s1.myPow/s1.defPow-1):0, s2.defPow>0?(s2.myPow/s2.defPow-1):0);
+      const newMax=Math.max(s2.defPow>0?(a.pow/s2.defPow-1):0, s1.defPow>0?(b2on1.pow/s1.defPow-1):0);
+      // Accept: 1) fewer risks 2) same risk + more same-bldg 3) same risk + same SB + lower max margin
+      if(newRisk<oldRisk||(newRisk===oldRisk&&newSB>oldSB)||(newRisk===oldRisk&&newSB===oldSB&&newMax<oldMax-0.05)){
+        s1.pid=p2.id;s1.result=b2on1.result;s1.gamble=b2on1.gamble;s1.myPow=b2on1.pow;s1.e5=p2.e5!==false;
         s2.pid=p1.id;s2.result=a.result;s2.gamble=a.gamble;s2.myPow=a.pow;s2.e5=p1.e5!==false;
-        roster.forEach(r=>pp[r.id]=[]);BLDGS.forEach(b=>plan[b.id].slots.filter(s=>s.pid).forEach(s=>{pp[s.pid].push({bid:b.id,si:s.defIdx,...s})}));imp=true}}
-    if(!imp)break}
+        roster.forEach(r=>pp[r.id]=[]);
+        BLDGS.forEach(bb=>{plan[bb.id].slots.filter(s=>s.pid).forEach(s=>{pp[s.pid].push({bid:bb.id,si:s.defIdx,...s})})});
+        imp=true;
+      }
+    }
+    if(!imp)break;
+  }
   checkCaps();
-  let score=0;BLDGS.forEach(b=>{if(plan[b.id].locked)return;score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length*CFG.fightPts;if(plan[b.id].captured)score+=b.bonus});
+  let score=0;BLDGS.forEach(b=>{if(plan[b.id].locked)return;
+    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length*CFG.fightPts;
+    if(plan[b.id].captured)score+=b.bonus});
   return{plan,pp,score};
 }
 
@@ -482,8 +540,8 @@ function renderOurDef(){
     ${col('T1',t1,true)}${col('T2',t2a)}${col('T2',t2b,true)}${col('T3',t3)}</div>`}
 
 // ═══ TAB 2: ATTACK RESULTS ═══
-function setSpent(pid,n){spentAttempts[pid]=n;saveLS();if(result){calcRemaining();renderScore();renderResults()}}
-function toggleSlot(bid,di){const k=bid+':'+di;closedSlots.has(k)?closedSlots.delete(k):closedSlots.add(k);saveLS();if(result){calcRemaining();renderScore();renderResults()}}
+function setSpent(pid,n){spentAttempts[pid]=n;saveLS();if(result){result={max:calcAtk('max',spentAttempts,closedSlots),safe:calcAtk('safe',spentAttempts,closedSlots)};renderScore();renderResults()}}
+function toggleSlot(bid,di){const k=bid+':'+di;closedSlots.has(k)?closedSlots.delete(k):closedSlots.add(k);saveLS();if(result){result={max:calcAtk('max',spentAttempts,closedSlots),safe:calcAtk('safe',spentAttempts,closedSlots)};renderScore();renderResults()}}
 function setPlan(m){activePlan=m;renderScore();renderResults()}
 
 let atkTableOpen=true,bldgViewOpen=true;
@@ -496,7 +554,7 @@ function renderResults(){
 
   // Plan toggle
   const mR=scM.risky+scM.gambles,sR=scS.risky+scS.gambles;
-  h+=`<div style="display:flex;gap:3px;margin-bottom:6px">
+  h+=`<div style="display:flex;gap:3px;margin-bottom:6px;align-items:center">
     <button class="btn btn-sm${activePlan==='max'?' btn-p':''}" onclick="setPlan('max')">🗡${scM.total}${mR?' ('+mR+'⚠)':''}</button>
     <button class="btn btn-sm${activePlan==='safe'?' btn-p':''}" onclick="setPlan('safe')">🛡${scS.total}</button>
     <span style="flex:1"></span>
