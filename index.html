@@ -415,15 +415,32 @@ function calcAtk(mode, preSpent, preClosed){
           const rq=beat.result==='win'?0:beat.result==='risky'?1:2;
           return{p,beat,waste:beat.pow-bs.effPow,sb:pp[p.id].some(a=>a.bid===bs.bid)?1:0,rq}}).filter(c=>c.beat);
       if(!cs.length){assigned.add(bs.bid+':'+bs.defIdx);continue}
-      sortFn(cs);
-      let pick=cs[0];const isCrit=CIT_UNLOCK.includes(bs.bid)||bs.bid==='citadel';
-      if(isCrit&&pick.p.risk&&cs.length>1){const nr=cs.find(c=>!c.p.risk);if(nr)pick=nr}
+      sortFn(cs,bs.bid);
+      let pick=cs[0];
       assignSlot(bs,pick.p,pick.beat);
     }}
-  // Hero: strongest first (guarantees capture). Titan: weakest sufficient.
-  // Swap phase evens out margins after all slots filled.
-  const heroSort=cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||b.beat.pow-a.beat.pow);
-  const titanSort=cs=>cs.sort((a,b)=>a.rq-b.rq||b.sb-a.sb||a.waste-b.waste);
+  // Hero: prefer LOW titan utility (preserve titan-capable for titan buildings)
+  // Safe mode: deprioritize risk players on critical buildings
+  const heroSort=(cs,bid)=>cs.sort((a,b)=>{
+    if(a.rq!==b.rq) return a.rq-b.rq;
+    if(mode==='safe'){
+      const isCrit=CIT_UNLOCK.includes(bid)||bid==='citadel';
+      if(isCrit&&a.p.risk!==b.p.risk) return a.p.risk?1:-1;
+    }
+    if(a.sb!==b.sb) return b.sb-a.sb;
+    const aTU=a.p.e5===false?0:(a.p.tPow||0);
+    const bTU=b.p.e5===false?0:(b.p.tPow||0);
+    if(aTU!==bTU) return aTU-bTU;
+    return b.beat.pow-a.beat.pow;
+  });
+  const titanSort=(cs,bid)=>cs.sort((a,b)=>{
+    if(a.rq!==b.rq) return a.rq-b.rq;
+    if(mode==='safe'){
+      const isCrit=CIT_UNLOCK.includes(bid)||bid==='citadel';
+      if(isCrit&&a.p.risk!==b.p.risk) return a.p.risk?1:-1;
+    }
+    return b.sb-a.sb||a.waste-b.waste;
+  });
   // R1: Capture hero slots — strongest, skip titan-critical
   assignRound(capH, heroSort, p=>!titanCritical.has(p.id));
   // R1b: Fill remaining capture hero slots (allow titan-critical if needed)
