@@ -71,6 +71,8 @@ td{padding:2px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
 .tlbl-t1{color:var(--tx3)}
 .tlbl-t2{color:#b06000}
 .tlbl-t3{color:var(--acc)}
+.row-freed{background:rgba(226,75,74,.13)!important}
+.row-new{background:rgba(29,158,117,.10)!important}
 #fileInput{display:none}
 </style>
 </head>
@@ -173,6 +175,21 @@ BLDGS.forEach(b => {
   ourDef[b.id] = Array(b.slots).fill(null);
   enmDef[b.id] = Array.from({length: b.slots}, () => ({name:'', power:0}));
 });
+
+// Track recently freed slots for highlight
+let defChanges = {}; // pid → 'freed' | 'assigned'
+
+function setOurDef(bid, si, newVal) {
+  const old = ourDef[bid][si];
+  defChanges = {};
+  if (old && old !== newVal) defChanges[old] = 'freed';
+  if (newVal) defChanges[newVal] = 'assigned';
+  ourDef[bid][si] = newVal || null;
+  saveLS();
+  renderAll();
+  // Clear highlights after 2s
+  setTimeout(() => { defChanges = {}; renderRoster(); }, 2000);
+}
 
 // ═══════════════════════════════════════════════
 // HELPERS
@@ -282,43 +299,15 @@ function autoDefense() {
 
 // ═══════════════════════════════════════════════
 // ATTACK OPTIMIZER
-// Rules:
-//   - Each player gets 2 attack attempts (total, any team mix)
-//   - Hero team attacks hero buildings, titan team attacks titan buildings
-//   - If h_id on defense → can't use hero team to attack
-//   - If t_id on defense → can't use titan team to attack
-//   - E5 titan: effective attack power boosted by titanBoost%  (gamble mode)
-//   - non-E5 titan: no boost, flagged risky
-//   - Risk player: still assigned but shown as 50/50, excluded from full-capture calc
+// Simple greedy: 2 attacks per player, 1 attacker per slot
+// Priority: high-bonus buildings first
 // ═══════════════════════════════════════════════
 function calcAtk() {
-  const ds = defSet();
-
-  // Per-player attack budget: max 2 total
-  const PAC = {}; // playerId → attacks used
+  // PAC[id] = number of attacks used (max 2)
+  const PAC = {};
   roster.forEach(p => PAC[p.id] = 0);
 
-  // Can this player attack with this team type?
-  function canAtk(p, type) {
-    if (PAC[p.id] >= 2) return false;
-    if (type === 'h') return !ds.has('h_'+p.id) && p.hPow > 0;
-    return !ds.has('t_'+p.id) && p.tPow > 0;
-  }
-
-  // Effective attack power: E5 boost, non-E5 penalty, heroes unchanged
-  function atkPow(p, type, gamble) {
-    if (type === 'h') return p.hPow;
-    if (p.e5 !== false) {
-      // E5 titan: boost in gamble mode, base power otherwise
-      return gamble ? Math.round(p.tPow * (1 + titanBoost / 100)) : p.tPow;
-    } else {
-      // non-E5 titan: always penalized regardless of gamble
-      return Math.round(p.tPow * (1 - titanPenalty / 100));
-    }
-  }
-
-  const plan = {};
-  const pp = {}; // atkPlayerPlan: playerId → [{bid,si,team,result,gamble,myPow,defPow,e5}]
+  const plan = {}, pp = {};
   roster.forEach(p => { pp[p.id] = []; });
   BLDGS.forEach(b => plan[b.id] = {slots:[], captured:false, bonus:0, locked:true});
 
@@ -330,81 +319,136 @@ function calcAtk() {
     return false;
   }
 
-  // Try to assign attacks for a building
-  function assign(b) {
+  // Effective power for attacker p using team type, optionally with E5 gamble
+  function ep(p, type, gamble) {
+    if (type === 'h') return p.hPow || 0;
+    const base = p.tPow || 0;
+    if (!base) return 0;
+    if (p.e5 === false) return Math.round(base * (1 - titanPenalty / 100));
+    return gamble ? Math.round(base * (1 + titanBoost / 100)) : base;
+  }
+
+  // Find the weakest-winning attacker for a defender slot
+  // usedInBldg: Set of player ids already used in this building this pass
+  function findAtk(type, defPow, usedInBldg) {
+    for (const gamble of [false, true]) {
+      if (gamble && type !== 't') continue;
+      const cand = roster
+        .filter(p => PAC[p.id] < 2 && !usedInBldg.has(p.id) &&
+                     (gamble ? p.e5 !== false : true) &&
+                     ep(p, type, gamble) > defPow)
+        .sort((a, x) => ep(a, type, gamble) - ep(x, type, gamble));
+      if (cand.length) {
+        const w = cand[0];
+        return {pid: w.id, result: gamble ? 'gamble' : 'win', gamble,
+                myPow: ep(w, type, gamble), defPow, e5: w.e5 !== false, team: type};
+      }
+    }
+    return null;
+  }
+
+  function processBuilding(b) {
     const type = b.type === 'titans' ? 't' : 'h';
-    const defs = enmDef[b.id].map((s,i) => ({...s,i})).filter(s => s.power>0||s.name.trim());
+    // Get defenders with power > 0 only
+    const defs = enmDef[b.id]
+      .map((s, i) => ({power: parseFloat(s.power) || 0, i}))
+      .filter(s => s.power > 0);
     if (!defs.length) return;
 
-    // Candidates: sorted weakest first (save strong for harder slots)
-    const cands = (gamble, tmpPAC) => roster.filter(p => {
-      if (!canAtk(p, type)) return false;
-      if ((PAC[p.id] + (tmpPAC[p.id]||0)) >= 2) return false;
-      if (gamble && (type !== 't' || p.e5 === false)) return false; // gamble only for E5 titans
-      return true;
-    }).sort((a,x) => atkPow(a,type,gamble) - atkPow(x,type,gamble));
-
-    // --- Pass 1: try full capture (safe) ---
-    // Skip risk players in full-capture calculation
-    const tryFull = (gamble) => {
-      const sortedHard = [...defs].sort((a,x) => x.power - a.power);
-      const tmp = [], tmpPAC = {};
-      for (const def of sortedHard) {
-        const pool = cands(gamble, tmpPAC).filter(p => {
-          if (p.risk) return false;
-          return atkPow(p, type, gamble) > def.power;
+    // --- Attempt full capture: assign hardest first ---
+    // Simulate without committing PAC
+    const simPAC = {}; // extra increments within this attempt
+    const tempSlots = [];
+    let canCap = true;
+    for (const def of [...defs].sort((a, x) => x.power - a.power)) {
+      // Build set of used in this attempt
+      const usedNow = new Set(tempSlots.map(s => s.pid));
+      // Apply simPAC on top of PAC for the check
+      const cand = roster
+        .filter(p => {
+          const total = (PAC[p.id]||0) + (simPAC[p.id]||0);
+          if (total >= 2) return false;
+          if (usedNow.has(p.id)) return false;
+          return true;
         });
-        if (!pool.length) return null;
-        const winner = pool[0];
-        tmp.push({defIdx:def.i, pid:winner.id, result:gamble?'gamble':'win', gamble, myPow:atkPow(winner,type,gamble), defPow:def.power, e5:winner.e5!==false});
-        tmpPAC[winner.id] = (tmpPAC[winner.id]||0) + 1;
+      let found = null;
+      for (const gamble of [false, true]) {
+        if (gamble && type !== 't') continue;
+        const pool = cand
+          .filter(p => (gamble ? p.e5 !== false : true) && ep(p, type, gamble) > def.power)
+          .sort((a, x) => ep(a, type, gamble) - ep(x, type, gamble));
+        if (pool.length) {
+          const w = pool[0];
+          found = {pid: w.id, result: gamble ? 'gamble' : 'win', gamble,
+                   myPow: ep(w, type, gamble), defPow: def.power, e5: w.e5 !== false, team: type, defIdx: def.i};
+          break;
+        }
       }
-      return tmp;
-    };
+      if (!found) { canCap = false; break; }
+      simPAC[found.pid] = (simPAC[found.pid]||0) + 1;
+      tempSlots.push(found);
+    }
 
-    const fullSafe   = tryFull(false);
-    const fullGamble = tryFull(true);
-    const fullResult = fullSafe || fullGamble;
-
-    if (fullResult) {
-      fullResult.forEach(m => {
-        PAC[m.pid]++;
-        pp[m.pid].push({bid:b.id, si:m.defIdx, team:type, result:m.result, gamble:m.gamble, myPow:m.myPow, defPow:m.defPow, e5:m.e5});
+    if (canCap) {
+      tempSlots.forEach(m => {
+        PAC[m.pid] = (PAC[m.pid]||0) + 1;
         plan[b.id].slots.push({defIdx:m.defIdx, pid:m.pid, team:type, result:m.result, gamble:m.gamble});
+        pp[m.pid].push({bid:b.id, si:m.defIdx, team:type, result:m.result, gamble:m.gamble, myPow:m.myPow, defPow:m.defPow, e5:m.e5});
       });
       plan[b.id].captured = true;
       plan[b.id].bonus = b.bonus;
       return;
     }
 
-    // --- Pass 2: partial — win as many as possible (easy first) ---
-    const tmpPAC2 = {};
-    [...defs].sort((a,x) => a.power - x.power).forEach(def => {
-      for (const gamble of [false, true]) {
-        const pool = cands(gamble, tmpPAC2).filter(p => atkPow(p, type, gamble) > def.power);
-        if (pool.length) {
-          const winner = pool[0];
-          PAC[winner.id]++;
-          tmpPAC2[winner.id] = (tmpPAC2[winner.id]||0) + 1;
-          pp[winner.id].push({bid:b.id, si:def.i, team:type, result:gamble?'gamble':'win', gamble, myPow:atkPow(winner,type,gamble), defPow:def.power, e5:winner.e5!==false});
-          plan[b.id].slots.push({defIdx:def.i, pid:winner.id, team:type, result:gamble?'gamble':'win', gamble});
-          return;
-        }
+    // --- Partial: fill easiest slots first ---
+    const usedInBldg = new Set();
+    for (const def of [...defs].sort((a, x) => a.power - x.power)) {
+      const asgn = findAtk(type, def.power, usedInBldg);
+      if (asgn) {
+        usedInBldg.add(asgn.pid);
+        PAC[asgn.pid] = (PAC[asgn.pid]||0) + 1;
+        plan[b.id].slots.push({defIdx:def.i, pid:asgn.pid, team:type, result:asgn.result, gamble:asgn.gamble});
+        pp[asgn.pid].push({bid:b.id, si:def.i, team:type, result:asgn.result, gamble:asgn.gamble, myPow:asgn.myPow, defPow:def.power, e5:asgn.e5});
+      } else {
+        plan[b.id].slots.push({defIdx:def.i, pid:null, team:type, result:'none', gamble:false});
       }
-      plan[b.id].slots.push({defIdx:def.i, pid:null, team:type, result:'none'});
-    });
+    }
   }
 
-  // Priority: high bonus first, then tier
-  const ordered = [...BLDGS].sort((a,b) => b.bonus - a.bonus || a.tier - b.tier);
+  const ordered = [...BLDGS].sort((a, b) => b.bonus - a.bonus || a.tier - b.tier);
 
   for (let pass = 0; pass < 3; pass++) {
     for (const b of ordered) {
       if (unlockable(b.id)) {
         plan[b.id].locked = false;
-        if (!plan[b.id].slots.length) assign(b);
+        if (!plan[b.id].slots.length) processBuilding(b);
       }
     }
+  }
+
+  // Pass 2: use remaining attacks (PAC < 2) on uncovered slots
+  for (const b of ordered) {
+    if (plan[b.id].locked) continue;
+    const type = b.type === 'titans' ? 't' : 'h';
+    const defs = enmDef[b.id].map((s,i) => ({power:parseFloat(s.power)||0,i})).filter(s=>s.power>0);
+    const coveredIdx = new Set(plan[b.id].slots.filter(s=>s.result!=='none'&&s.result!==undefined).map(s=>s.defIdx));
+    for (const def of defs) {
+      if (coveredIdx.has(def.i)) continue;
+      const usedInBldg = new Set(plan[b.id].slots.filter(s=>s.pid).map(s=>s.pid));
+      const asgn = findAtk(type, def.power, usedInBldg);
+      if (asgn) {
+        PAC[asgn.pid] = (PAC[asgn.pid]||0) + 1;
+        const existing = plan[b.id].slots.find(s=>s.defIdx===def.i);
+        if (existing) { existing.pid=asgn.pid; existing.result=asgn.result; existing.gamble=asgn.gamble; }
+        else plan[b.id].slots.push({defIdx:def.i, pid:asgn.pid, team:type, result:asgn.result, gamble:asgn.gamble});
+        pp[asgn.pid].push({bid:b.id, si:def.i, team:type, result:asgn.result, gamble:asgn.gamble, myPow:asgn.myPow, defPow:def.power, e5:asgn.e5});
+        coveredIdx.add(def.i);
+      }
+    }
+    // Recheck capture
+    const allDefs = enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0);
+    const wins = plan[b.id].slots.filter(s=>s.result==='win'||s.result==='gamble').length;
+    if (allDefs.length && wins === allDefs.length) { plan[b.id].captured=true; plan[b.id].bonus=b.bonus; }
   }
 
   atkPlan = plan;
@@ -434,9 +478,6 @@ function getScore() {
 // ═══════════════════════════════════════════════
 function renderScore() {
   const sc = getScore();
-  const ds = defSet();
-  const fH = roster.filter(r => !ds.has('h_'+r.id) && r.hPow > 0).length;
-  const fT = roster.filter(r => !ds.has('t_'+r.id) && r.tPow > 0).length;
   const gambNote = sc.gambWins > 0 ? ` <span style="color:var(--warn);font-size:11px">(+${sc.gambWins}🎲)</span>` : '';
   document.getElementById('scoreBar').innerHTML =
     `<div class="sm"><small>Safe wins</small><b style="color:var(--win)">${sc.wins}${gambNote}</b></div>
@@ -444,7 +485,7 @@ function renderScore() {
      <div class="sm sdiv"><small>Bonus</small><b style="color:var(--acc)">${sc.bonus}</b></div>
      <div class="sm sdiv"><small>TOTAL</small><b style="font-size:20px;color:var(--win)">${sc.total}</b></div>
      <div class="sm sdiv"><small>Captures</small><b style="color:var(--acc)">${sc.caps}/${BLDGS.length}</b></div>
-     <div class="sm sdiv"><small>Free ⚔️/⚡</small><b style="color:var(--tx2)">${fH}/${fT}</b></div>`;
+     <div class="sm sdiv"><small>Players</small><b style="color:var(--tx2)">${roster.length}</b></div>`;
 }
 
 // ═══════════════════════════════════════════════
@@ -457,21 +498,6 @@ function enmSlots() {
     for (let si = 0; si < b.slots; si++) slots.push({bid: b.id, si});
   });
   return slots;
-}
-
-// Enter on enemy name: name[0] → name[1] → ... across all buildings
-function enmNameEnter(e, bid, si) {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  enmDef[bid][si].name = e.target.value;
-  saveLS();
-  const slots = enmSlots();
-  const cur = slots.findIndex(s => s.bid === bid && s.si === si);
-  const next = slots[cur + 1];
-  if (next) {
-    const el = document.getElementById(`en_${next.bid}_${next.si}_n`);
-    if (el) { el.focus(); el.select(); }
-  }
 }
 
 // Enter on enemy power: power[0] → power[1] → ... across all buildings
@@ -549,7 +575,10 @@ function renderRoster() {
         : hDef ? '⚔️🛡 ⚡free'
         : tDef ? '⚡🛡 ⚔️free'
         : '— free';
-      h += `<tr>
+      const hSid_h = 'h_'+p.id, hSid_t = 't_'+p.id;
+      const rowHighlight = defChanges[hSid_h]==='freed'||defChanges[hSid_t]==='freed' ? 'row-freed'
+        : defChanges[hSid_h]==='assigned'||defChanges[hSid_t]==='assigned' ? 'row-new' : '';
+      h += `<tr class="${rowHighlight}">
         <td style="color:var(--tx3)">${i+1}</td>
         <td><input type="text" id="rn_${i}" value="${esc(p.name)}" placeholder="player name"
           style="width:100%;font-size:10px;padding:1px 3px"
@@ -632,7 +661,7 @@ function defSlotsTable(b, pool) {
     const inf = slotInfo(sid);
     t += `<tr>
       <td style="color:var(--tx3)">${si+1}</td>
-      <td><select onchange="ourDef['${b.id}'][${si}]=this.value||null;saveLS();renderAll()">
+      <td><select onchange="setOurDef('${b.id}',${si},this.value)">
         <option value="">—</option>`;
     pool.forEach(s => {
       const info = slotInfo(s);
@@ -687,7 +716,7 @@ function renderOurDef() {
       const sid = ourDef[b.id][si];
       const inf = slotInfo(sid);
       let sel = `<select style="width:100%;font-size:10px;padding:1px 3px;border:1px solid var(--bd);border-radius:3px;background:var(--bg);color:var(--tx)"
-        onchange="ourDef['${b.id}'][${si}]=this.value||null;saveLS();renderAll()">
+        onchange="setOurDef('${b.id}',${si},this.value)">
         <option value="">—</option>`;
       pool.forEach(s => {
         const info = slotInfo(s);
@@ -764,17 +793,13 @@ function renderEnmDef() {
 
   const enmSlotRows = (b) => {
     let t = `<table style="font-size:10px;width:100%"><thead><tr>
-      <th style="width:14px">#</th><th>Name</th>
-      <th style="width:58px;text-align:right">${b.type==='titans'?'⚡':'⚔️'} (K)</th>
+      <th style="width:20px">#</th>
+      <th style="text-align:right">${b.type==='titans'?'⚡':'⚔️'} Power (K)</th>
     </tr></thead><tbody>`;
     for (let si = 0; si < b.slots; si++) {
       const s = enmDef[b.id][si];
       t += `<tr>
         <td style="color:var(--tx3)">${si+1}</td>
-        <td><input type="text" id="en_${b.id}_${si}_n" value="${esc(s.name)}" placeholder="—"
-          style="width:100%;font-size:10px;padding:1px 3px"
-          onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS();updateButtons()"
-          onkeydown="enmNameEnter(event,'${b.id}',${si})"></td>
         <td><input type="text" inputmode="decimal" id="en_${b.id}_${si}_p" value="${s.power||0}"
           class="num" style="font-size:10px;padding:1px 4px;width:100%"
           onfocus="if(this.value==='0')this.value=''"
@@ -826,37 +851,28 @@ function renderEnmDef() {
 
     const mkInputPair = (si) => {
       const s = enmDef[b.id][si];
-      return {
-        name: `<input type="text" id="en_${b.id}_${si}_n" value="${esc(s.name)}" placeholder="—"
-          style="width:100%;font-size:10px;padding:1px 3px;border:1px solid var(--bd);border-radius:3px;background:var(--bg);color:var(--tx)"
-          onchange="enmDef['${b.id}'][${si}].name=this.value;saveLS();updateButtons()"
-          onkeydown="enmNameEnter(event,'${b.id}',${si})">`,
-        pow: `<input type="text" inputmode="decimal" id="en_${b.id}_${si}_p" value="${s.power||0}"
-          style="width:100%;font-size:10px;padding:1px 4px;text-align:right;border:1px solid var(--bd);border-radius:3px;background:var(--bg);color:var(--tx)"
-          onfocus="if(this.value==='0')this.value=''"
-          onblur="if(!this.value||isNaN(+this.value))this.value='0'"
-          onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"
-          onkeydown="enmPowEnter(event,'${b.id}',${si})">`
-      };
+      return `<input type="text" inputmode="decimal" id="en_${b.id}_${si}_p" value="${s.power||0}"
+        style="width:100%;font-size:10px;padding:1px 4px;text-align:right;border:1px solid var(--bd);border-radius:3px;background:var(--bg);color:var(--tx)"
+        onfocus="if(this.value==='0')this.value=''"
+        onblur="if(!this.value||isNaN(+this.value))this.value='0'"
+        onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"
+        onkeydown="enmPowEnter(event,'${b.id}',${si})">`;
     };
 
     let t = `<table style="font-size:10px;width:100%;table-layout:fixed"><thead><tr>
-      <th style="width:16px">#</th><th>Name</th><th style="width:50px;text-align:right">(K)</th>
-      <th style="width:10px;border:none;background:transparent"></th>
-      <th style="width:16px">#</th><th>Name</th><th style="width:50px;text-align:right">(K)</th>
+      <th style="width:18px">#</th><th style="text-align:right">Power (K)</th>
+      <th style="width:12px;border:none;background:transparent"></th>
+      <th style="width:18px">#</th><th style="text-align:right">Power (K)</th>
     </tr></thead><tbody>`;
     for (let row = 0; row < half; row++) {
       const siL = row, siR = row + half;
-      const L = mkInputPair(siL);
       const hasR = siR < b.slots;
-      const R = hasR ? mkInputPair(siR) : null;
       t += `<tr>
         <td style="color:var(--tx3)">${siL+1}</td>
-        <td>${L.name}</td><td>${L.pow}</td>
+        <td>${mkInputPair(siL)}</td>
         <td style="border:none"></td>
         <td style="color:var(--tx3)">${hasR?siR+1:''}</td>
-        <td>${hasR?R.name:''}</td>
-        <td>${hasR?R.pow:''}</td>
+        <td>${hasR?mkInputPair(siR):''}</td>
       </tr>`;
     }
     t += `</tbody></table>`;
@@ -941,15 +957,14 @@ function renderResults() {
       const b = BLDGS.find(x=>x.id===a.bid);
       const icon = a.team==='h' ? '⚔️' : '⚡';
       const e5warn = a.team==='t' && !a.e5 ? '<span style="color:var(--lose)" title="Non-E5">⚠️</span>' : '';
-      const def = enmDef[a.bid][a.si];
-      const defName = def?.name ? esc(def.name) : `slot${a.si+1}`;
+      const slotLabel = `slot ${a.si+1}`;
       if (a.result==='win') {
         return `<span style="color:var(--win)">${icon}${e5warn} ${b.ru}<br>
-          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K &gt; ${a.defPow}K · ${defName}</span>
+          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K &gt; ${a.defPow}K · ${slotLabel}</span>
         </span>`;
       } else if (a.result==='gamble') {
         return `<span style="color:var(--warn)">${icon}${e5warn} ${b.ru} 🎲<br>
-          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K* &gt; ${a.defPow}K · ${defName}</span>
+          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K* &gt; ${a.defPow}K · ${slotLabel}</span>
         </span>`;
       }
       return `<span style="color:var(--lose)">${icon} ${b.ru}<br>
@@ -1001,9 +1016,10 @@ function renderResults() {
       h += `</div><div style="font-size:9px;color:var(--tx3)">${b.name}</div></div>`;
       if (!locked && defs.length) {
         h += `<table style="font-size:10px"><thead><tr>
-          <th style="width:14px">#</th><th>Enemy</th>
-          <th style="width:46px;text-align:right">Def</th>
+          <th style="width:14px">#</th>
+          <th style="width:52px;text-align:right">Def (K)</th>
           <th>Attacker</th>
+          <th style="width:52px;text-align:right">Atk (K)</th>
           <th style="width:38px;text-align:center">Result</th>
         </tr></thead><tbody>`;
         defs.forEach((def) => {
@@ -1014,12 +1030,14 @@ function renderResults() {
           const rb = res==='win'?'var(--winbg)':isGamble?'var(--warnbg)':'';
           const e5w = slot?.team==='t' && pl && pl.e5===false ? '⚠️' : '';
           const riskW = pl?.risk ? '🚧' : '';
+          const defPow = enmDef[b.id][def.i]?.power || def.power;
+          const atkPw = slot ? (pl ? (isGamble ? Math.round((slot.team==='t'?pl.tPow:pl.hPow)*(1+titanBoost/100)) : (slot.team==='t'?pl.tPow:pl.hPow)) : null) : null;
           h += `<tr${rb?` style="background:${rb}"`:''}>
             <td style="color:var(--tx3)">${def.i+1}</td>
-            <td style="font-size:10px">${esc(def.name||'—')}</td>
-            <td style="text-align:right">${def.power?def.power+'K':'—'}</td>
-            <td style="${pl?'font-weight:500':'color:var(--tx3)'}font-size:10px">
+            <td style="text-align:right">${defPow?defPow+'K':'—'}</td>
+            <td style="${pl?'font-weight:500':'color:var(--tx3)'}">
               ${pl?esc(pl.name||'?')+e5w+riskW:'—'}</td>
+            <td style="text-align:right">${atkPw?atkPw+'K':'—'}</td>
             <td style="text-align:center">
               ${res==='win'?'<span class="pill pw">WIN</span>'
                 :res==='gamble'?'<span class="pill" style="background:var(--warnbg);color:var(--warn)">🎲</span>'
@@ -1119,7 +1137,7 @@ function migrateRoster(r) {
 // EXPORT / IMPORT / RESET
 // ═══════════════════════════════════════════════
 function doExport() {
-  const data = {v:4, roster, ourDef, enmDef, ghostBridge, fightPts, nextId};
+  const data = {v:4, roster, ourDef, enmDef, ghostBridge, fightPts, titanBoost, titanPenalty, nextId};
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data,null,2));
   a.download = 'gw_' + new Date().toISOString().slice(0,10) + '.json';
@@ -1141,10 +1159,9 @@ function doImport(e) {
       if (d.nextId) nextId = d.nextId;
       if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
       if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
-      if (d.fightPts) {
-        fightPts = d.fightPts;
-        document.getElementById('fptInp').value = fightPts;
-      }
+      if (d.fightPts) { fightPts = d.fightPts; document.getElementById('fptInp').value = fightPts; }
+      if (d.titanBoost !== undefined) { titanBoost = d.titanBoost; const el=document.getElementById('boostInp'); if(el) el.value=titanBoost; }
+      if (d.titanPenalty !== undefined) { titanPenalty = d.titanPenalty; const el=document.getElementById('penaltyInp'); if(el) el.value=titanPenalty; }
       atkPlan = null;
       renderAll();
       alert('✓ Loaded!');
