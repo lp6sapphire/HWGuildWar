@@ -41,7 +41,7 @@ td{padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:
 .sm small{font-size:9px;color:var(--tx3);display:block;text-transform:uppercase;letter-spacing:.03em}
 .sm b{font-size:17px;font-weight:600}
 .sdiv{border-left:1px solid var(--bd);padding-left:10px}
-.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:10px;gap:2px}
+.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:10px;gap:2px;align-items:center}
 .tab{padding:7px 16px;font-size:12px;cursor:pointer;border:none;background:none;
   color:var(--tx3);border-bottom:2px solid transparent;font-family:inherit;transition:all .15s}
 .tab:hover{color:var(--tx2)}.tab.on{color:var(--tx);font-weight:600;border-bottom-color:var(--win)}
@@ -113,33 +113,36 @@ td{padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:
     <span style="font-size:10px;color:var(--tx3)">Below = risky</span>
   </div>
   <div class="set-row">
-    <label>👻 Ghost Bridge:</label>
-    <span style="font-size:11px;color:var(--warn);font-weight:600">always active</span>
+    <label>👻 Ghost Bridge insurance:</label>
+    <input type="checkbox" id="ghostInsInp" checked
+      onchange="CFG.ghostInsurance=this.checked;saveLS()">
+    <span style="font-size:10px;color:var(--tx3)">ON = Barracks+Lighthouse+Mage обязательны для capture (страховка если Bridge risky)</span>
   </div>
 </div>
 
 <div class="sbar" id="scoreBar"></div>
 
-<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;cursor:pointer" onclick="toggleRoster()">
+  <span id="rosterArrow" style="font-size:10px;color:var(--tx3);transition:transform .2s">▶</span>
   <b style="font-size:14px">Roster</b>
-  <button class="btn btn-sm" onclick="addPlayer()" id="addBtn">+ Player</button>
-  <button class="btn btn-sm" onclick="sortRoster('max');renderAll()">↕ Overall</button>
-  <button class="btn btn-sm" onclick="sortRoster('h');renderAll()">↕ ⚔️</button>
-  <button class="btn btn-sm" onclick="sortRoster('t');renderAll()">↕ ⚡</button>
-  <button class="btn btn-d btn-sm" onclick="clearPowers()">🗑 Clear</button>
-  <span style="font-size:10px;color:var(--tx3)">🛡=def 🚧=risk</span>
+  <span id="rosterCount" style="font-size:11px;color:var(--tx3)"></span>
+  <span style="flex:1"></span>
+  <span onclick="event.stopPropagation()" style="display:flex;gap:4px;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="addPlayer()" id="addBtn">+ Player</button>
+    <button class="btn btn-sm" onclick="sortRoster('max');renderAll()">↕</button>
+    <button class="btn btn-sm" onclick="sortRoster('h');renderAll()">↕⚔️</button>
+    <button class="btn btn-sm" onclick="sortRoster('t');renderAll()">↕⚡</button>
+    <button class="btn btn-d btn-sm" onclick="clearPowers()">🗑</button>
+  </span>
 </div>
-<div id="rosterWrap" style="margin-bottom:8px"></div>
-
-<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-  <button id="defBtn" class="btn btn-p" style="flex:1;min-width:180px;padding:9px" onclick="autoDefense()">🛡 Auto defense</button>
-  <button id="atkBtn" class="btn btn-p" style="flex:1;min-width:180px;padding:9px" onclick="runCalc()">⚔️ Calculate attack</button>
-</div>
+<div id="rosterWrap" style="margin-bottom:8px;display:none"></div>
 
 <div class="tabs">
-  <button class="tab on" id="tab0" onclick="setTab(0)">🛡 Our Defense</button>
-  <button class="tab"    id="tab1" onclick="setTab(1)">🗡 Enemy Defense</button>
-  <button class="tab"    id="tab2" onclick="setTab(2)">📊 Attack Plan</button>
+  <button class="tab on" id="tab0" onclick="setTab(0)">🛡 Defense</button>
+  <button id="defBtn" class="btn btn-p btn-sm" style="margin:2px 4px;padding:3px 10px" onclick="autoDefense()">🛡 Auto</button>
+  <button class="tab"    id="tab1" onclick="setTab(1)">🗡 Enemy</button>
+  <button class="tab"    id="tab2" onclick="setTab(2)">📊 Attack</button>
+  <button id="atkBtn" class="btn btn-p btn-sm" style="margin:2px 4px;padding:3px 10px" onclick="runCalc()">⚔️ Calculate</button>
 </div>
 <div id="tabContent"></div>
 
@@ -165,7 +168,7 @@ const DEF_ORDER  = [...BLDGS].sort((a,b) => b.bonus-a.bonus || a.tier-b.tier);
 const MAX_P = 20, MAX_ATK = 2;
 
 // Settings — not saved in export, only localStorage
-const CFG = {fightPts:20, titanBoost:10, titanPenalty:10, winMargin:15};
+const CFG = {fightPts:20, titanBoost:10, titanPenalty:10, winMargin:15, ghostInsurance:true};
 
 // ═══════════════════════════════════════════════
 // STATE
@@ -186,6 +189,13 @@ BLDGS.forEach(b=>{
 // ═══════════════════════════════════════════════
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('open')}
+
+let rosterOpen=false;
+function toggleRoster(){
+  rosterOpen=!rosterOpen;
+  document.getElementById('rosterWrap').style.display=rosterOpen?'block':'none';
+  document.getElementById('rosterArrow').style.transform=rosterOpen?'rotate(90deg)':'';
+}
 
 function slotInfo(sid){
   if(!sid)return null;
@@ -333,6 +343,13 @@ function calcAtk(mode, preSpent, preClosed){
       const b=BLDGS.find(x=>x.id===id);
       if(b.tier===2&&!isT2Unlocked(capSet)) return false;
       if(b.tier===3&&!isCitUnlocked(capSet)) return false;
+    }
+    // Ghost Bridge insurance: if ON and we plan to capture any T2/T3,
+    // Ghost Bridge buildings (Barracks+Lighthouse+Mage) must ALL be in capture set.
+    // This ensures the alternative path to T2 even if Bridge gamble fails.
+    if(CFG.ghostInsurance){
+      const hasT2orT3=[...capSet].some(id=>{const b=BLDGS.find(x=>x.id===id);return b.tier>=2});
+      if(hasT2orT3&&!GHOST_REQ.every(id=>capSet.has(id))) return false;
     }
     return true;
   }
@@ -676,7 +693,13 @@ function rPowEnter(e,i,f){
 
 function renderRoster(){
   const btn=document.getElementById('addBtn');
-  if(btn) btn.textContent=`+ Player (${roster.length}/${MAX_P})`;
+  if(btn) btn.textContent=`+ (${roster.length}/${MAX_P})`;
+  const rc=document.getElementById('rosterCount');
+  if(rc){
+    const totalH=roster.reduce((s,p)=>s+(p.hPow||0),0);
+    const totalT=roster.reduce((s,p)=>s+(p.tPow||0),0);
+    rc.textContent=`${roster.length} players · ⚔️${totalH}K · ⚡${totalT}K`;
+  }
   const w=document.getElementById('rosterWrap');
   if(!roster.length){w.innerHTML='<div style="color:var(--tx3);font-size:11px">No players.</div>';return}
   const ds=defSet(),half=Math.ceil(roster.length/2);
@@ -1112,6 +1135,7 @@ function loadLS(){
     if(c.titanBoost!==undefined) CFG.titanBoost=c.titanBoost;
     if(c.titanPenalty!==undefined) CFG.titanPenalty=c.titanPenalty;
     if(c.winMargin!==undefined) CFG.winMargin=c.winMargin;
+    if(c.ghostInsurance!==undefined) CFG.ghostInsurance=c.ghostInsurance;
     return true;
   }catch(e){return false}
 }
@@ -1130,6 +1154,7 @@ function syncSettings(){
   document.getElementById('boostInp').value=CFG.titanBoost;
   document.getElementById('penaltyInp').value=CFG.titanPenalty;
   document.getElementById('marginInp').value=CFG.winMargin;
+  document.getElementById('ghostInsInp').checked=CFG.ghostInsurance;
 }
 function renderAll(){renderScore();renderRoster();renderTab(activeTab);updateButtons();saveLS()}
 
