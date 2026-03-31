@@ -663,21 +663,32 @@ function renderResults(){
   // Building view (collapsible)
   h+=`<div class="section"><div class="section-hdr" onclick="bldgViewOpen=!bldgViewOpen;renderResults()">${bldgViewOpen?'▼':'▶'} By building</div>`;
   if(bldgViewOpen){
+    // Check real accessibility: is building reachable based on actually-captured buildings?
+    function isCapturedReal(bid){const allD=enmDef[bid].filter(s=>s.power>0);
+      return allD.length>0&&allD.every((s,i)=>closedSlots.has(bid+':'+i))}
+    function isT2Accessible(){return isCapturedReal('bridge')||(isCapturedReal('barracks')&&isCapturedReal('lighthouse')&&isCapturedReal('mage'))}
+    function isCitAccessible(){return isT2Accessible()&&CIT_UNLOCK.some(id=>isCapturedReal(id))}
+    function isAccessible(b){if(b.tier===1)return true;if(b.tier===2)return isT2Accessible();return isCitAccessible()}
+
     const bCard=b=>{const p=curPlan[b.id];
-      const cap=p?.captured,locked=p?.locked;const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length||0;
+      const cap=p?.captured,planLocked=p?.locked;
+      const realLocked=!isAccessible(b); // actual game state
+      const locked=planLocked||realLocked;
+      const wC=p?.slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='gamble').length||0;
       const cC=p?.slots.filter(s=>s.result==='closed').length||0;const allD=enmDef[b.id].filter(s=>s.power>0);const tot=allD.length;
       const bc=b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
       let cc='card';if(!locked){if(cap)cc+=' cap';else if(wC+cC>0&&wC+cC<tot)cc+=' part';else if(tot>0&&!wC&&!cC)cc+=' fail'}
-      let c=`<div class="${cc}" style="${locked?'opacity:.3':''}">
+      let c=`<div class="${cc}">
         <div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
           <b style="font-size:10px">${b.name}</b><span style="flex:1"></span>
           <span style="font-size:9px;font-weight:600;color:${bc}">+${b.bonus}</span>`;
-      if(locked)c+=`<span style="font-size:8px">🔒</span>`;
+      if(realLocked)c+=`<span style="font-size:8px">🔒</span>`;
+      else if(planLocked)c+=`<span style="font-size:8px">🔒</span>`;
       else if(cap)c+=`<span style="font-size:8px;color:var(--win)">🏴</span>`;
       else if(wC+cC>0)c+=`<span style="font-size:8px;color:var(--warn)">${wC+cC}/${tot}</span>`;
       c+=`</div>`;
-      if(!locked&&allD.length){c+=`<table style="font-size:9px"><thead><tr><th>#</th><th>ATTACKER</th><th style="text-align:right">ATK vs DEF</th><th style="text-align:right">+K</th><th style="text-align:right">%</th><th>✓</th></tr></thead><tbody>`;
-        allD.forEach(def=>{const di=enmDef[b.id].indexOf(def);const sl=p?.slots.find(s=>s.defIdx===di);
+      if(allD.length){c+=`<table style="font-size:9px${realLocked?';opacity:.5':''}"><thead><tr><th>#</th><th>ATTACKER</th><th style="text-align:right">ATK vs DEF</th><th style="text-align:right">+K</th><th style="text-align:right">%</th><th>✓</th></tr></thead><tbody>`;
+        allD.forEach(def=>{const di=enmDef[b.id].indexOf(def);const sl=planLocked?null:p?.slots.find(s=>s.defIdx===di);
           const pl=sl?.pid?roster.find(r=>r.id===sl.pid):null;const isCl=closedSlots.has(b.id+':'+di);
           const ne5=def.e5===false&&b.type==='titans'?'<span class="ne5">ne5</span>':'';
           const effP=sl?sl.defPow:def.power;
@@ -685,7 +696,8 @@ function renderResults(){
           const bg=isCl?'var(--winbg)':sl?.result?marginBg(margin):'';
           const mc=sl?.result?marginCol(margin):'var(--tx3)';
           const strike=isCl?'text-decoration:line-through;opacity:.4':'';
-          const clBtn=isCl?`<span onclick="toggleSlot('${b.id}',${di})" style="cursor:pointer">✅</span>`
+          const clBtn=realLocked?`<span style="color:var(--tx3);opacity:.3">🔒</span>`
+            :isCl?`<span onclick="toggleSlot('${b.id}',${di})" style="cursor:pointer">✅</span>`
             :`<span onclick="toggleSlot('${b.id}',${di})" style="cursor:pointer;color:var(--tx3)">○</span>`;
           c+=`<tr style="background:${bg};${strike}">
             <td style="color:var(--tx3)">${di+1}</td>
