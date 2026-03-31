@@ -93,8 +93,11 @@ td{padding:2px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
     <input type="number" id="boostInp" value="10" min="0" max="50" style="width:36px"
       onchange="titanBoost=parseInt(this.value)||0;saveLS()">%
   </label>
-  <label style="font-size:11px;display:flex;align-items:center;gap:4px" title="Non-E5 titan attack penalty %">
-    ⚡ non-E5 penalty:
+  <label style="font-size:11px;display:flex;align-items:center;gap:4px" title="Minimum power advantage % to count as a reliable win">
+    Min win margin:
+    <input type="number" id="marginInp" value="15" min="0" max="50" style="width:36px"
+      onchange="winMargin=parseInt(this.value)||0;saveLS()">%
+  </label>
     <input type="number" id="penaltyInp" value="10" min="0" max="50" style="width:36px"
       onchange="titanPenalty=parseInt(this.value)||0;saveLS()">%
   </label>
@@ -164,16 +167,22 @@ let ourDef  = {};
 let enmDef  = {};
 let atkPlan = null;
 let atkPlayerPlan = null; // playerId → [{bid, si, team, result, gamble, myPow, defPow}]
+// Fact tracking — simple:
+// spentAttempts: {pid → 0|1|2} how many attempts player has used
+// closedSlots: Set of 'bid:defIdx' — slots already cleared by anyone
+let spentAttempts = {};
+let closedSlots = new Set();
 let ghostBridge = true; // always active
 let fightPts = 20;
 let titanBoost = 10; // % E5 titan attack advantage
 let titanPenalty = 10; // % non-E5 titan attack penalty
+let winMargin = 15; // % minimum power advantage required to count as a win
 let nextId = 1;
 let activeTab = 0;
 
 BLDGS.forEach(b => {
   ourDef[b.id] = Array(b.slots).fill(null);
-  enmDef[b.id] = Array.from({length: b.slots}, () => ({name:'', power:0}));
+  enmDef[b.id] = Array.from({length: b.slots}, () => ({power:0, e5:true}));
 });
 
 // Track recently freed slots for highlight
@@ -302,14 +311,25 @@ function autoDefense() {
 // Simple greedy: 2 attacks per player, 1 attacker per slot
 // Priority: high-bonus buildings first
 // ═══════════════════════════════════════════════
-function calcAtk() {
+function calcAtk(preSpent, preClosed) {
   // PAC[id] = number of attacks used (max 2)
+  // preSpent: optional {pid → n} to pre-consume attempts (for recalc remaining)
+  // preClosed: optional Set of 'bid:defIdx' already cleared
   const PAC = {};
-  roster.forEach(p => PAC[p.id] = 0);
+  roster.forEach(p => PAC[p.id] = (preSpent && preSpent[p.id]) || 0);
 
   const plan = {}, pp = {};
   roster.forEach(p => { pp[p.id] = []; });
   BLDGS.forEach(b => plan[b.id] = {slots:[], captured:false, bonus:0, locked:true});
+
+  // Pre-mark closed slots
+  if (preClosed) {
+    preClosed.forEach(key => {
+      const [bid, idxStr] = key.split(':');
+      const defIdx = parseInt(idxStr);
+      if (plan[bid]) plan[bid].slots.push({defIdx, pid:null, team:'', result:'closed', gamble:false, actual:true});
+    });
+  }
 
   function unlockable(id) {
     const b = BLDGS.find(x => x.id === id);
@@ -317,6 +337,14 @@ function calcAtk() {
     if (b.tier === 2) return plan['bridge']?.captured || ghostBridge;
     if (b.tier === 3) return T3P.some(pid => plan[pid]?.captured);
     return false;
+  }
+
+  // Effective defense power of enemy slot (E5 titans get boost)
+  function defEP(slot, type) {
+    const base = parseFloat(slot.power) || 0;
+    if (type !== 't') return base;
+    if (slot.e5 === false) return base; // non-E5 enemy: no boost
+    return Math.round(base * (1 + titanBoost / 100)); // E5 enemy: boosted defense
   }
 
   // Effective power for attacker p using team type, optionally with E5 gamble
@@ -328,20 +356,25 @@ function calcAtk() {
     return gamble ? Math.round(base * (1 + titanBoost / 100)) : base;
   }
 
-  // Find the weakest-winning attacker for a defender slot
-  // usedInBldg: Set of player ids already used in this building this pass
+  // Does attacker with power atkP reliably beat defender with power defP?
+  function wins(atkP, defP) { return atkP >= defP * (1 + winMargin / 100); }
+  function beats(atkP, defP) { return atkP > defP; } // any advantage
+
+  // Find the STRONGEST attacker who can beat a defender slot
   function findAtk(type, defPow, usedInBldg) {
     for (const gamble of [false, true]) {
       if (gamble && type !== 't') continue;
       const cand = roster
         .filter(p => PAC[p.id] < 2 && !usedInBldg.has(p.id) &&
                      (gamble ? p.e5 !== false : true) &&
-                     ep(p, type, gamble) > defPow)
-        .sort((a, x) => ep(a, type, gamble) - ep(x, type, gamble));
+                     beats(ep(p, type, gamble), defPow))
+        .sort((a, x) => ep(x, type, gamble) - ep(a, type, gamble)); // STRONGEST first
       if (cand.length) {
         const w = cand[0];
-        return {pid: w.id, result: gamble ? 'gamble' : 'win', gamble,
-                myPow: ep(w, type, gamble), defPow, e5: w.e5 !== false, team: type};
+        const eff = ep(w, type, gamble);
+        const res = gamble ? 'gamble' : (wins(eff, defPow) ? 'win' : 'risky');
+        return {pid: w.id, result: res, gamble,
+                myPow: eff, defPow, e5: w.e5 !== false, team: type};
       }
     }
     return null;
@@ -349,21 +382,32 @@ function calcAtk() {
 
   function processBuilding(b) {
     const type = b.type === 'titans' ? 't' : 'h';
-    // Get defenders with power > 0 only
+    // Skip slots already pre-closed
+    const preClosedInBldg = new Set(plan[b.id].slots.filter(s=>s.result==='closed').map(s=>s.defIdx));
+    // Get defenders with power > 0, compute effective defense power
     const defs = enmDef[b.id]
-      .map((s, i) => ({power: parseFloat(s.power) || 0, i}))
-      .filter(s => s.power > 0);
-    if (!defs.length) return;
+      .map((s, i) => ({
+        power: parseFloat(s.power) || 0,
+        effPow: defEP(s, type),
+        e5: s.e5 !== false,
+        i
+      }))
+      .filter(s => s.power > 0 && !preClosedInBldg.has(s.i));
+    if (!defs.length) {
+      // Check if all slots already closed
+      const allD = enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0);
+      if (allD.length && allD.every(d=>preClosedInBldg.has(d.i || allD.indexOf(d)))) {
+        plan[b.id].captured = true; plan[b.id].bonus = b.bonus;
+      }
+      return;
+    }
 
-    // --- Attempt full capture: assign hardest first ---
-    // Simulate without committing PAC
-    const simPAC = {}; // extra increments within this attempt
+    // --- Attempt full capture: strongest defender → strongest attacker ---
+    const simPAC = {};
     const tempSlots = [];
     let canCap = true;
-    for (const def of [...defs].sort((a, x) => x.power - a.power)) {
-      // Build set of used in this attempt
+    for (const def of [...defs].sort((a, x) => x.effPow - a.effPow)) {
       const usedNow = new Set(tempSlots.map(s => s.pid));
-      // Apply simPAC on top of PAC for the check
       const cand = roster
         .filter(p => {
           const total = (PAC[p.id]||0) + (simPAC[p.id]||0);
@@ -375,12 +419,14 @@ function calcAtk() {
       for (const gamble of [false, true]) {
         if (gamble && type !== 't') continue;
         const pool = cand
-          .filter(p => (gamble ? p.e5 !== false : true) && ep(p, type, gamble) > def.power)
-          .sort((a, x) => ep(a, type, gamble) - ep(x, type, gamble));
+          .filter(p => (gamble ? p.e5 !== false : true) && beats(ep(p, type, gamble), def.effPow))
+          .sort((a, x) => ep(x, type, gamble) - ep(a, type, gamble)); // strongest first
         if (pool.length) {
           const w = pool[0];
-          found = {pid: w.id, result: gamble ? 'gamble' : 'win', gamble,
-                   myPow: ep(w, type, gamble), defPow: def.power, e5: w.e5 !== false, team: type, defIdx: def.i};
+          const eff = ep(w, type, gamble);
+          const res = gamble ? 'gamble' : (wins(eff, def.effPow) ? 'win' : 'risky');
+          found = {pid: w.id, result: res, gamble,
+                   myPow: eff, defPow: def.effPow, e5: w.e5 !== false, team: type, defIdx: def.i};
           break;
         }
       }
@@ -402,13 +448,13 @@ function calcAtk() {
 
     // --- Partial: fill easiest slots first ---
     const usedInBldg = new Set();
-    for (const def of [...defs].sort((a, x) => a.power - x.power)) {
-      const asgn = findAtk(type, def.power, usedInBldg);
+    for (const def of [...defs].sort((a, x) => a.effPow - x.effPow)) {
+      const asgn = findAtk(type, def.effPow, usedInBldg);
       if (asgn) {
         usedInBldg.add(asgn.pid);
         PAC[asgn.pid] = (PAC[asgn.pid]||0) + 1;
         plan[b.id].slots.push({defIdx:def.i, pid:asgn.pid, team:type, result:asgn.result, gamble:asgn.gamble});
-        pp[asgn.pid].push({bid:b.id, si:def.i, team:type, result:asgn.result, gamble:asgn.gamble, myPow:asgn.myPow, defPow:def.power, e5:asgn.e5});
+        pp[asgn.pid].push({bid:b.id, si:def.i, team:type, result:asgn.result, gamble:asgn.gamble, myPow:asgn.myPow, defPow:def.effPow, e5:asgn.e5});
       } else {
         plan[b.id].slots.push({defIdx:def.i, pid:null, team:type, result:'none', gamble:false});
       }
@@ -426,29 +472,96 @@ function calcAtk() {
     }
   }
 
-  // Pass 2: use remaining attacks (PAC < 2) on uncovered slots
-  for (const b of ordered) {
-    if (plan[b.id].locked) continue;
-    const type = b.type === 'titans' ? 't' : 'h';
-    const defs = enmDef[b.id].map((s,i) => ({power:parseFloat(s.power)||0,i})).filter(s=>s.power>0);
-    const coveredIdx = new Set(plan[b.id].slots.filter(s=>s.result!=='none'&&s.result!==undefined).map(s=>s.defIdx));
-    for (const def of defs) {
-      if (coveredIdx.has(def.i)) continue;
-      const usedInBldg = new Set(plan[b.id].slots.filter(s=>s.pid).map(s=>s.pid));
-      const asgn = findAtk(type, def.power, usedInBldg);
-      if (asgn) {
-        PAC[asgn.pid] = (PAC[asgn.pid]||0) + 1;
-        const existing = plan[b.id].slots.find(s=>s.defIdx===def.i);
-        if (existing) { existing.pid=asgn.pid; existing.result=asgn.result; existing.gamble=asgn.gamble; }
-        else plan[b.id].slots.push({defIdx:def.i, pid:asgn.pid, team:type, result:asgn.result, gamble:asgn.gamble});
-        pp[asgn.pid].push({bid:b.id, si:def.i, team:type, result:asgn.result, gamble:asgn.gamble, myPow:asgn.myPow, defPow:def.power, e5:asgn.e5});
-        coveredIdx.add(def.i);
+  // Pass 2: assign second attacks to every player who still has PAC < 2
+  // For each player, find the best winnable slot across all unlocked buildings
+  // (high-bonus buildings first, hardest-to-beat defender first = more points)
+  roster.forEach(p => {
+    if (PAC[p.id] >= 2) return;
+
+    // Try both team types
+    for (const type of ['h', 't']) {
+      if (PAC[p.id] >= 2) break;
+      const pow = type === 'h' ? (p.hPow||0) : (p.tPow||0);
+      if (!pow) continue;
+
+      // Find best slot: same building first (priority), then highest-bonus building
+      let bestMatch = null, bestBldg = null, bestDef = null;
+
+      // Buildings where this player already has attack 1
+      const myBldgs = new Set(pp[p.id].filter(a => a.team === type).map(a => a.bid));
+
+      // Two-pass: first try same buildings, then others
+      const sortedBldgs = [...ordered].sort((a, b) => {
+        const aHas = myBldgs.has(a.id) ? 0 : 1;
+        const bHas = myBldgs.has(b.id) ? 0 : 1;
+        if (aHas !== bHas) return aHas - bHas; // same building first
+        return b.bonus - a.bonus; // then highest bonus
+      });
+
+      for (const b of sortedBldgs) {
+        if (plan[b.id].locked) continue;
+        if (b.type !== (type === 'h' ? 'heroes' : 'titans')) continue;
+
+        const defs = enmDef[b.id]
+          .map((s,i) => ({power: parseFloat(s.power)||0, effPow: defEP(s, type), i}))
+          .filter(s => s.power > 0);
+
+        for (const gamble of [false, true]) {
+          if (gamble && type !== 't') continue;
+          if (gamble && p.e5 === false) continue;
+
+          const effPow = gamble
+            ? Math.round(pow * (1 + titanBoost / 100))
+            : (p.e5 === false && type === 't'
+               ? Math.round(pow * (1 - titanPenalty / 100))
+               : pow);
+
+          // Find strongest defender we can beat (not already attacked by this player)
+          const alreadyUsedSlots = new Set(plan[b.id].slots.filter(s=>s.pid===p.id).map(s=>s.defIdx));
+          const beatable = defs.filter(d => effPow > d.effPow && !alreadyUsedSlots.has(d.i));
+          if (!beatable.length) continue;
+          const strongest = beatable.sort((a,x) => x.effPow - a.effPow)[0];
+
+          // Pick highest-bonus building with any beatable slot
+          if (!bestMatch || b.bonus > bestBldg.bonus ||
+              (b.bonus === bestBldg.bonus && strongest.effPow > (bestDef?.effPow||0))) {
+            bestMatch = {gamble, effPow, defIdx: strongest.i, defPow: strongest.effPow};
+            bestBldg = b;
+            bestDef = strongest;
+          }
+          break;
+        }
+        if (bestMatch) break;
+      }
+
+      if (bestMatch && bestBldg) {
+        const res = bestMatch.gamble ? 'gamble' : 'win';
+        PAC[p.id]++;
+        plan[bestBldg.id].slots.push({
+          defIdx: bestMatch.defIdx, pid: p.id, team: type,
+          result: res, gamble: bestMatch.gamble
+        });
+        pp[p.id].push({
+          bid: bestBldg.id, si: bestMatch.defIdx, team: type,
+          result: res, gamble: bestMatch.gamble,
+          myPow: bestMatch.effPow, defPow: bestMatch.defPow,
+          e5: p.e5 !== false
+        });
       }
     }
-    // Recheck capture
-    const allDefs = enmDef[b.id].filter(s=>(parseFloat(s.power)||0)>0);
-    const wins = plan[b.id].slots.filter(s=>s.result==='win'||s.result==='gamble').length;
-    if (allDefs.length && wins === allDefs.length) { plan[b.id].captured=true; plan[b.id].bonus=b.bonus; }
+  });
+
+  // Recheck captures after second attacks
+  for (const b of ordered) {
+    if (plan[b.id].locked) continue;
+    const allDefs = enmDef[b.id].filter(s => (parseFloat(s.power)||0) > 0);
+    const winSlots = plan[b.id].slots.filter(s => s.result==='win'||s.result==='gamble'||s.result==='risky');
+    // Each defender slot must have at least one winner
+    const coveredDefs = new Set(winSlots.map(s => s.defIdx));
+    if (allDefs.length && allDefs.every(d => coveredDefs.has(d.i ?? allDefs.indexOf(d)))) {
+      plan[b.id].captured = true;
+      plan[b.id].bonus = b.bonus;
+    }
   }
 
   atkPlan = plan;
@@ -465,7 +578,7 @@ function getScore() {
     const p = atkPlan[b.id];
     if (!p || p.locked) return;
     wins     += p.slots.filter(s => s.result==='win').length;
-    gambWins += p.slots.filter(s => s.result==='gamble').length;
+    gambWins += p.slots.filter(s => s.result==='gamble'||s.result==='risky').length;
     bonus    += p.bonus;
     if (p.captured) caps++;
   });
@@ -792,12 +905,15 @@ function renderEnmDef() {
   </div>`;
 
   const enmSlotRows = (b) => {
+    const isT = b.type === 'titans';
     let t = `<table style="font-size:10px;width:100%"><thead><tr>
       <th style="width:20px">#</th>
-      <th style="text-align:right">${b.type==='titans'?'⚡':'⚔️'} Power (K)</th>
+      <th style="text-align:right">${isT?'⚡':'⚔️'} Power (K)</th>
+      ${isT ? '<th style="width:28px;text-align:center" title="Enemy E5 titans">E5</th>' : ''}
     </tr></thead><tbody>`;
     for (let si = 0; si < b.slots; si++) {
       const s = enmDef[b.id][si];
+      const e5val = s.e5 !== false;
       t += `<tr>
         <td style="color:var(--tx3)">${si+1}</td>
         <td><input type="text" inputmode="decimal" id="en_${b.id}_${si}_p" value="${s.power||0}"
@@ -806,6 +922,8 @@ function renderEnmDef() {
           onblur="if(!this.value||isNaN(+this.value))this.value='0'"
           onchange="enmDef['${b.id}'][${si}].power=parseFloat(this.value)||0;saveLS();updateButtons()"
           onkeydown="enmPowEnter(event,'${b.id}',${si})"></td>
+        ${isT ? `<td style="text-align:center"><input type="checkbox" ${e5val?'checked':''}
+          onchange="enmDef['${b.id}'][${si}].e5=this.checked;saveLS()"></td>` : ''}
       </tr>`;
     }
     return t + `</tbody></table>`;
@@ -893,7 +1011,7 @@ function renderEnmDef() {
   document.getElementById('tabContent').innerHTML = h;
 }
 function clearEB(id) {
-  enmDef[id] = Array.from({length: BLDGS.find(b=>b.id===id).slots}, ()=>({name:'',power:0}));
+  enmDef[id] = Array.from({length: BLDGS.find(b=>b.id===id).slots}, ()=>({power:0, e5:true}));
   saveLS();
   renderTab(activeTab);
 }
@@ -901,7 +1019,41 @@ function clearEB(id) {
 // ═══════════════════════════════════════════════
 // TAB 2 — RESULTS
 // ═══════════════════════════════════════════════
-function runCalc() { calcAtk(); renderScore(); setTab(2); }
+function runCalc() {
+  spentAttempts = {}; closedSlots = new Set(); // fresh plan — reset actual results
+  calcAtk();
+  renderScore();
+  setTab(2);
+  saveLS();
+}
+
+// ── Fact tracking helpers ──────────────────────────────────────────
+// setSpent(pid, n): mark player spent n attempts (0/1/2)
+function setSpent(pid, n) {
+  spentAttempts[pid] = n;
+  saveLS();
+  calcRemaining();
+  renderScore();
+  renderResults();
+}
+// toggleSlot(bid, defIdx): toggle closed/open for a slot
+function toggleSlot(bid, defIdx) {
+  const key = bid+':'+defIdx;
+  if (closedSlots.has(key)) closedSlots.delete(key);
+  else closedSlots.add(key);
+  saveLS();
+  calcRemaining();
+  renderScore();
+  renderResults();
+}
+
+// Recalc plan with remaining attempts and still-open slots
+// Recalc remaining — full recalc using the same calcAtk,
+// but pre-consuming spent attempts and skipping closed slots
+function calcRemaining() {
+  if (!atkPlan) return;
+  calcAtk(spentAttempts, closedSlots);
+}
 
 function renderResults() {
   if (!atkPlan) {
@@ -916,24 +1068,26 @@ function renderResults() {
   let h = '';
 
   // ── Summary ─────────────────────────────────
-  const gambNote = sc.gambWins > 0 ? ` +${sc.gambWins}🎲` : '';
+  const gambNote = sc.gambWins > 0 ? ` +${sc.gambWins}🎲⚠` : '';
+  const hasFactData = Object.keys(spentAttempts).length > 0 || closedSlots.size > 0;
   h += `<div class="card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
     <span style="font-size:13px;font-weight:600">Attack Plan</span>
+    ${hasFactData ? `<span style="font-size:10px;background:var(--warnbg);color:var(--warn);padding:2px 8px;border-radius:4px">⚡ Fact data active</span>` : ''}
     <span style="flex:1"></span>
     <span style="font-size:11px">Captures: <b style="color:var(--win)">${sc.caps}</b></span>
     <span style="font-size:11px">Wins: <b style="color:var(--win)">${sc.wins}${gambNote}</b> × ${fightPts} = <b>${sc.totalWins*fightPts}</b></span>
     <span style="font-size:11px">Bonus: <b style="color:var(--acc)">${sc.bonus}</b></span>
     <span style="font-size:15px;font-weight:700">Total: <b style="color:var(--win)">${sc.total}</b></span>
-    <button class="btn" onclick="runCalc()">↻ Recalc</button>
+    <button class="btn" onclick="runCalc()" title="Full recalc, clears fact data">↻ New plan</button>
   </div>`;
 
   // ── Legend ────────────────────────────────────
-  h += `<div style="display:flex;gap:8px;font-size:10px;color:var(--tx2);margin-bottom:8px;flex-wrap:wrap">
-    <span><span class="pill pw">WIN</span> Guaranteed</span>
-    <span><span class="pill" style="background:var(--warnbg);color:var(--warn)">🎲 GAMBLE</span> E5 titan boost (may win)</span>
-    <span><span class="pill pl">LOSE</span> Outmatched</span>
-    <span>⚠️ Non-E5 titan — risky</span>
-    <span>🚧 Risk player — 50/50</span>
+  h += `<div style="display:flex;gap:10px;font-size:10px;color:var(--tx2);margin-bottom:8px;flex-wrap:wrap">
+    <span><span class="pill pw">WIN</span> Reliable (≥margin%)</span>
+    <span><span class="pill" style="background:var(--warnbg);color:var(--warn)">⚠ RISKY</span> Wins but &lt;margin%</span>
+    <span><span class="pill" style="background:var(--warnbg);color:var(--warn)">🎲</span> E5 gamble</span>
+    <span>⚠️ Non-E5 · 🚧 Risk</span>
+    <span style="color:var(--tx3)">Spent: how many attempts this player has used · ✅ = slot already closed</span>
   </div>`;
 
   // ── Player-centric table ─────────────────────
@@ -942,35 +1096,41 @@ function renderResults() {
   h += `<table style="font-size:11px"><thead><tr>
     <th style="width:20px">#</th>
     <th>Player</th>
-    <th style="width:28px;text-align:center" title="Risk player">🚧</th>
+    <th style="width:28px;text-align:center">🚧</th>
     <th>Attack 1</th>
     <th>Attack 2</th>
+    <th style="width:96px;text-align:center">Spent</th>
     <th style="width:46px;text-align:right">Pts</th>
   </tr></thead><tbody>`;
 
   const ds2 = defSet();
   roster.forEach((p, idx) => {
     const atks = atkPlayerPlan?.[p.id] || [];
-    const ptsEarned = atks.filter(a => a.result==='win'||a.result==='gamble').length * fightPts;
+    const ptsEarned = atks.filter(a => a.result==='win'||a.result==='gamble'||a.result==='risky').length * fightPts;
+    const spent = spentAttempts[p.id] || 0;
+
     const fmtAtk = (a) => {
       if (!a) return `<span style="color:var(--tx3)">—</span>`;
       const b = BLDGS.find(x=>x.id===a.bid);
       const icon = a.team==='h' ? '⚔️' : '⚡';
       const e5warn = a.team==='t' && !a.e5 ? '<span style="color:var(--lose)" title="Non-E5">⚠️</span>' : '';
       const slotLabel = `slot ${a.si+1}`;
-      if (a.result==='win') {
-        return `<span style="color:var(--win)">${icon}${e5warn} ${b.ru}<br>
-          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K &gt; ${a.defPow}K · ${slotLabel}</span>
-        </span>`;
-      } else if (a.result==='gamble') {
-        return `<span style="color:var(--warn)">${icon}${e5warn} ${b.ru} 🎲<br>
-          <span style="font-size:9px;color:var(--tx2)">${a.myPow}K* &gt; ${a.defPow}K · ${slotLabel}</span>
-        </span>`;
-      }
-      return `<span style="color:var(--lose)">${icon} ${b.ru}<br>
-        <span style="font-size:9px">${a.myPow}K vs ${a.defPow}K</span>
+      const col = a.result==='win' ? 'var(--win)' : (a.result==='gamble'||a.result==='risky') ? 'var(--warn)' : 'var(--lose)';
+      const closed = closedSlots.has(a.bid+':'+a.si);
+      return `<span style="color:${col};${closed?'text-decoration:line-through;opacity:.5':''}">${icon}${e5warn} ${b.ru}<br>
+        <span style="font-size:9px;color:var(--tx2)">${a.myPow}K &gt; ${a.defPow}K · ${slotLabel}${closed?' ✅':''}</span>
       </span>`;
     };
+
+    // Spent attempts selector: 0 / 1 / 2
+    const spentBtns = [0,1,2].map(n => {
+      const on = spent === n;
+      return `<button onclick="setSpent(${p.id},${n})"
+        style="font-size:10px;padding:1px 7px;border-radius:3px;border:1px solid ${on?'var(--acc)':'var(--bd)'};
+        background:${on?'rgba(37,99,235,.15)':'var(--bg)'};color:${on?'var(--acc)':'var(--tx3)'};
+        cursor:pointer;font-family:inherit;font-weight:${on?'600':'400'}">${n}</button>`;
+    }).join('');
+
     const riskMark = p.risk ? '🚧' : '';
     const rowBg = p.risk ? 'background:var(--warnbg)' : atks.length===0 ? 'opacity:.5' : '';
     h += `<tr${rowBg?` style="${rowBg}"`:''}>
@@ -979,6 +1139,7 @@ function renderResults() {
       <td style="text-align:center">${riskMark}</td>
       <td style="padding:3px 4px;line-height:1.4">${fmtAtk(atks[0])}</td>
       <td style="padding:3px 4px;line-height:1.4">${fmtAtk(atks[1])}</td>
+      <td style="text-align:center"><div style="display:flex;gap:3px;justify-content:center">${spentBtns}</div></td>
       <td style="text-align:right;font-weight:600;color:${ptsEarned?'var(--win)':'var(--tx3)'}">${ptsEarned||'—'}</td>
     </tr>`;
   });
@@ -993,7 +1154,7 @@ function renderResults() {
     BLDGS.filter(b => b.tier===tier).forEach(b => {
       const p     = atkPlan[b.id];
       const cap   = p?.captured, locked = p?.locked;
-      const wins  = p?.slots.filter(s => s.result==='win'||s.result==='gamble').length || 0;
+      const wins  = p?.slots.filter(s => s.result==='win'||s.result==='gamble'||s.result==='risky').length || 0;
       const defs  = enmDef[b.id].map((s,i)=>({...s,i})).filter(s=>s.power>0||s.name.trim());
       const total = defs.length;
       const bonusColor = b.bonus>=120?'var(--acc)':b.bonus>=60?'var(--warn)':'var(--tx2)';
@@ -1026,23 +1187,25 @@ function renderResults() {
           const slot = p?.slots.find(s => s.defIdx===def.i);
           const pl   = slot?.pid ? roster.find(r=>r.id===slot.pid) : null;
           const res  = slot?.result || 'none';
+          const isClosed = closedSlots.has(b.id+':'+def.i);
           const isGamble = res==='gamble';
-          const rb = res==='win'?'var(--winbg)':isGamble?'var(--warnbg)':'';
+          const rb = isClosed ? 'var(--winbg)' : res==='win'?'var(--winbg)':isGamble?'var(--warnbg)':'';
           const e5w = slot?.team==='t' && pl && pl.e5===false ? '⚠️' : '';
           const riskW = pl?.risk ? '🚧' : '';
           const defPow = enmDef[b.id][def.i]?.power || def.power;
           const atkPw = slot ? (pl ? (isGamble ? Math.round((slot.team==='t'?pl.tPow:pl.hPow)*(1+titanBoost/100)) : (slot.team==='t'?pl.tPow:pl.hPow)) : null) : null;
+          const closedBtn = isClosed
+            ? `<button onclick="toggleSlot('${b.id}',${def.i})" title="Click to re-open"
+                style="font-size:10px;padding:0 5px;border-radius:3px;border:1px solid var(--win);background:var(--winbg);color:var(--win);cursor:pointer">✅ closed</button>`
+            : `<button onclick="toggleSlot('${b.id}',${def.i})" title="Mark as closed"
+                style="font-size:10px;padding:0 5px;border-radius:3px;border:1px solid var(--bd);background:var(--bg);color:var(--tx3);cursor:pointer">○</button>`;
           h += `<tr${rb?` style="background:${rb}"`:''}>
             <td style="color:var(--tx3)">${def.i+1}</td>
             <td style="text-align:right">${defPow?defPow+'K':'—'}</td>
             <td style="${pl?'font-weight:500':'color:var(--tx3)'}">
               ${pl?esc(pl.name||'?')+e5w+riskW:'—'}</td>
             <td style="text-align:right">${atkPw?atkPw+'K':'—'}</td>
-            <td style="text-align:center">
-              ${res==='win'?'<span class="pill pw">WIN</span>'
-                :res==='gamble'?'<span class="pill" style="background:var(--warnbg);color:var(--warn)">🎲</span>'
-                :'<span class="pill pe">—</span>'}
-            </td>
+            <td style="text-align:center">${closedBtn}</td>
           </tr>`;
         });
         h += `</tbody></table>`;
@@ -1137,7 +1300,7 @@ function migrateRoster(r) {
 // EXPORT / IMPORT / RESET
 // ═══════════════════════════════════════════════
 function doExport() {
-  const data = {v:4, roster, ourDef, enmDef, ghostBridge, fightPts, titanBoost, titanPenalty, nextId};
+  const data = {v:4, roster, ourDef, enmDef, ghostBridge, fightPts, titanBoost, titanPenalty, spentAttempts, closedSlots:Array.from(closedSlots), nextId};
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data,null,2));
   a.download = 'gw_' + new Date().toISOString().slice(0,10) + '.json';
@@ -1158,10 +1321,23 @@ function doImport(e) {
       }));
       if (d.nextId) nextId = d.nextId;
       if (d.ourDef) BLDGS.forEach(b => { if(d.ourDef[b.id]) ourDef[b.id] = d.ourDef[b.id]; });
-      if (d.enmDef) BLDGS.forEach(b => { if(d.enmDef[b.id]) enmDef[b.id] = d.enmDef[b.id]; });
+      if (d.enmDef) BLDGS.forEach(b => {
+        if (d.enmDef[b.id]) {
+          enmDef[b.id] = d.enmDef[b.id].map(s => ({
+            power: parseFloat(s.power) || 0,
+            e5: s.e5 !== undefined ? s.e5 : true
+          }));
+          // pad to correct slot count if needed
+          while (enmDef[b.id].length < b.slots)
+            enmDef[b.id].push({name:'', power:0});
+        }
+      });
       if (d.fightPts) { fightPts = d.fightPts; document.getElementById('fptInp').value = fightPts; }
       if (d.titanBoost !== undefined) { titanBoost = d.titanBoost; const el=document.getElementById('boostInp'); if(el) el.value=titanBoost; }
       if (d.titanPenalty !== undefined) { titanPenalty = d.titanPenalty; const el=document.getElementById('penaltyInp'); if(el) el.value=titanPenalty; }
+      if (d.winMargin !== undefined) { winMargin = d.winMargin; const el2=document.getElementById('marginInp'); if(el2) el2.value=winMargin; }
+      if (d.spentAttempts) spentAttempts = d.spentAttempts; else spentAttempts = {};
+      if (d.closedSlots) closedSlots = new Set(d.closedSlots); else closedSlots = new Set();
       atkPlan = null;
       renderAll();
       alert('✓ Loaded!');
@@ -1173,7 +1349,7 @@ function resetWar() {
   if (!confirm('Clear defense and attack plan? Roster is kept.')) return;
   BLDGS.forEach(b => {
     ourDef[b.id] = Array(b.slots).fill(null);
-    enmDef[b.id] = Array.from({length:b.slots}, ()=>({name:'',power:0}));
+    enmDef[b.id] = Array.from({length:b.slots}, ()=>({power:0, e5:true}));
   });
   atkPlan = null;
   renderAll();
@@ -1184,7 +1360,7 @@ function resetWar() {
 // ═══════════════════════════════════════════════
 const LS = 'gwp_v4';
 function saveLS() {
-  try { localStorage.setItem(LS, JSON.stringify({v:4,roster,ourDef,enmDef,ghostBridge,fightPts,titanBoost,titanPenalty,nextId})); } catch(e) {}
+  try { localStorage.setItem(LS, JSON.stringify({v:4,roster,ourDef,enmDef,ghostBridge,fightPts,titanBoost,titanPenalty,winMargin,spentAttempts,closedSlots:Array.from(closedSlots),nextId})); } catch(e) {}
 }
 function loadLS() {
   try {
@@ -1212,6 +1388,8 @@ function loadLS() {
       titanPenalty = d.titanPenalty;
       const el = document.getElementById('penaltyInp'); if (el) el.value = titanPenalty;
     }
+    if (d.spentAttempts) spentAttempts = d.spentAttempts;
+    if (d.closedSlots) closedSlots = new Set(d.closedSlots);
     return true;
   } catch(e) { return false; }
 }
