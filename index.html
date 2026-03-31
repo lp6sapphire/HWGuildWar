@@ -68,12 +68,66 @@ td{padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:
 
 <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
   <b style="font-size:15px">⚔️ GW Planner</b>
+  <button class="btn btn-sm" onclick="toggleHelp()" id="helpBtn" style="font-size:11px;padding:1px 7px;border-radius:50%">?</button>
   <span style="flex:1"></span>
   <button class="btn btn-sm" onclick="toggleSettings()">⚙️</button>
   <button class="btn btn-sm" onclick="doExport()">💾</button>
   <button class="btn btn-sm" onclick="document.getElementById('fileInput').click()">📂</button>
   <button class="btn btn-d btn-sm" onclick="resetWar()">🗑</button>
   <input type="file" id="fileInput" accept=".json" onchange="doImport(event)">
+</div>
+
+<div id="helpPanel" style="display:none;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;font-size:11px;line-height:1.6;max-height:70vh;overflow-y:auto">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <b style="font-size:13px" id="helpTitle">📖 Инструкция</b>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm" id="helpLangBtn" onclick="toggleHelpLang()" style="font-size:10px">EN</button>
+    <button class="btn btn-sm" onclick="toggleHelp()">✕</button>
+  </div>
+  <div id="helpRU">
+    <p><b>1. Ростер</b> — введите имена и силу героев (⚔️) и титанов (⚡) каждого игрока. E5 = полный элемент титанов. 🚧 = рискованный игрок (не ставить на ключевые здания). Кнопки ± для быстрой корректировки.</p>
+    <p><b>2. Enemy (враг)</b> — введите силу защитников каждого здания. Для титанов отмечайте E5 чекбоксом. Не-E5 враги получают штраф (Non-E5 penalty в настройках).</p>
+    <p><b>3. Настройки ⚙️</b></p>
+    <p style="padding-left:12px">• <b>Pts per win</b> — очки за победу (обычно 20)<br>
+    • <b>E5 boost</b> — бонус силы E5 титанов (%)<br>
+    • <b>Non-E5 penalty</b> — штраф не-E5 титанов (и наших, и врагов)<br>
+    • <b>Hero margin</b> — мин. запас силы для героев (%)<br>
+    • <b>Titan margin</b> — мин. запас силы для титанов (%)</p>
+    <p><b>4. Ghost Bridge 👻</b> — если включен, алгоритм обязательно берёт Казармы + Маяк + Академию Магов (страховка пути к T2).</p>
+    <p><b>5. ⚔️ Calc</b> — запускает расчёт. Сбрасывает прогресс (spent/closed). Генерирует два плана:</p>
+    <p style="padding-left:12px">• <b>🗡 Max</b> — агрессивный: использует все возможные победы, включая risky (маржа ниже порога, но побеждаем)<br>
+    • <b>🛡 Safe</b> — страховочный: только уверенные победы (маржа выше порога). Risky атаки отбрасываются. Может потерять здания, но каждая атака надёжна.</p>
+    <p><b>6. Трекинг боя</b> — в таблице игроков кликайте 0/1/2 (потраченные атаки). В таблице зданий кликайте ✓ (слот закрыт). План автоматически пересчитывается.</p>
+    <p><b>7. Алгоритм</b></p>
+    <p style="padding-left:12px">• Перебирает 1024 комбинации зданий, выбирает максимум очков<br>
+    • R1: герои на hero-здания (сильнейший на дефицитный слот)<br>
+    • R2: титаны на titan-здания (слабейший достаточный)<br>
+    • R3-R4: оставшиеся атаки<br>
+    • Swap: выравнивает маржу, группирует 2 атаки на одно здание</p>
+    <p><b>8. Экспорт/Импорт</b> — 💾 сохраняет JSON, 📂 загружает. Данные также сохраняются в браузере автоматически.</p>
+  </div>
+  <div id="helpEN" style="display:none">
+    <p><b>1. Roster</b> — enter player names and hero (⚔️) / titan (⚡) power. E5 = full element titans. 🚧 = risky player (avoid on key buildings). Use ± buttons for quick adjustments.</p>
+    <p><b>2. Enemy</b> — enter defender power for each building slot. Mark E5 checkbox for titan buildings. Non-E5 enemies receive a penalty (Non-E5 penalty setting).</p>
+    <p><b>3. Settings ⚙️</b></p>
+    <p style="padding-left:12px">• <b>Pts per win</b> — points per fight won (usually 20)<br>
+    • <b>E5 boost</b> — E5 titan power bonus (%)<br>
+    • <b>Non-E5 penalty</b> — penalty for non-E5 titans (ours and enemy)<br>
+    • <b>Hero margin</b> — min power margin for heroes (%)<br>
+    • <b>Titan margin</b> — min power margin for titans (%)</p>
+    <p><b>4. Ghost Bridge 👻</b> — when enabled, algorithm must capture Barracks + Lighthouse + Mage Academy (T2 path insurance).</p>
+    <p><b>5. ⚔️ Calc</b> — runs calculation. Resets progress (spent/closed). Generates two plans:</p>
+    <p style="padding-left:12px">• <b>🗡 Max</b> — aggressive: uses all possible wins, including risky ones (margin below threshold but still winning)<br>
+    • <b>🛡 Safe</b> — conservative: only confident wins (margin above threshold). Risky attacks are skipped. May lose buildings, but every attack is reliable.</p>
+    <p><b>6. Battle tracking</b> — click 0/1/2 in player table (spent attacks). Click ✓ in building table (slot closed). Plan auto-recalculates.</p>
+    <p><b>7. Algorithm</b></p>
+    <p style="padding-left:12px">• Enumerates 1024 building combinations, picks max score<br>
+    • R1: heroes on hero-buildings (strongest on scarcest slot)<br>
+    • R2: titans on titan-buildings (weakest sufficient)<br>
+    • R3-R4: remaining attacks<br>
+    • Swap: evens out margins, consolidates 2 attacks on same building</p>
+    <p><b>8. Export/Import</b> — 💾 saves JSON, 📂 loads. Data also auto-saves in browser.</p>
+  </div>
 </div>
 
 <div class="set-panel" id="settingsPanel">
@@ -183,6 +237,13 @@ function marginCol(pct){
   return'var(--lose)';
 }
 function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('open')}
+let _helpLang='ru';
+function toggleHelp(){const p=document.getElementById('helpPanel');p.style.display=p.style.display==='none'?'block':'none'}
+function toggleHelpLang(){_helpLang=_helpLang==='ru'?'en':'ru';
+  document.getElementById('helpRU').style.display=_helpLang==='ru'?'block':'none';
+  document.getElementById('helpEN').style.display=_helpLang==='en'?'block':'none';
+  document.getElementById('helpLangBtn').textContent=_helpLang==='ru'?'EN':'RU';
+  document.getElementById('helpTitle').textContent=_helpLang==='ru'?'📖 Инструкция':'📖 Instructions'}
 function setEnter(e,nextId){if(e.key!=='Enter')return;e.preventDefault();e.target.dispatchEvent(new Event('change'));const nx=document.getElementById(nextId);if(nx){nx.focus();nx.select()}}
 document.addEventListener('focusin',e=>{if(e.target.tagName==='INPUT'&&(e.target.type==='text'||e.target.type==='number'))setTimeout(()=>e.target.select(),0)})
 function toggleRoster(){rosterOpen=!rosterOpen;document.getElementById('rosterWrap').style.display=rosterOpen?'block':'none';document.getElementById('rosterArrow').style.transform=rosterOpen?'rotate(90deg)':''}
