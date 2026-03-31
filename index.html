@@ -107,10 +107,16 @@ td{padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:
       onchange="CFG.titanPenalty=parseInt(this.value)||0;saveLS()">%
   </div>
   <div class="set-row">
-    <label>Min win margin:</label>
-    <input type="number" id="marginInp" value="15" min="0" max="50"
-      onchange="CFG.winMargin=parseInt(this.value)||0;saveLS()">%
-    <span style="font-size:10px;color:var(--tx3)">Below = risky</span>
+    <label>⚔️ Hero win margin:</label>
+    <input type="number" id="hMarginInp" value="20" min="0" max="50"
+      onchange="CFG.heroMargin=parseInt(this.value)||0;saveLS()">%
+    <span style="font-size:10px;color:var(--tx3)">Heroes are unpredictable</span>
+  </div>
+  <div class="set-row">
+    <label>⚡ Titan win margin:</label>
+    <input type="number" id="tMarginInp" value="5" min="0" max="50"
+      onchange="CFG.titanMargin=parseInt(this.value)||0;saveLS()">%
+    <span style="font-size:10px;color:var(--tx3)">Titans are predictable</span>
   </div>
   <div class="set-row">
     <label>👻 Ghost Bridge insurance:</label>
@@ -168,7 +174,7 @@ const DEF_ORDER  = [...BLDGS].sort((a,b) => b.bonus-a.bonus || a.tier-b.tier);
 const MAX_P = 20, MAX_ATK = 2;
 
 // Settings — not saved in export, only localStorage
-const CFG = {fightPts:20, titanBoost:10, titanPenalty:10, winMargin:15, ghostInsurance:true};
+const CFG = {fightPts:20, titanBoost:10, titanPenalty:10, heroMargin:20, titanMargin:5, ghostInsurance:true};
 
 // ═══════════════════════════════════════════════
 // STATE
@@ -280,9 +286,10 @@ function calcAtk(mode, preSpent, preClosed){
     return gamble?Math.round(base*(1+CFG.titanBoost/100)):base;
   }
   function canBeat(p,defPow,tt){
+    const margin=tt==='h'?CFG.heroMargin:CFG.titanMargin;
     const pow=atkEP(p,tt,false);
     if(pow>defPow){
-      const rel=pow>=defPow*(1+CFG.winMargin/100);
+      const rel=pow>=defPow*(1+margin/100);
       if(mode==='safe'&&!rel){/* fall to gamble */}
       else return{gamble:false,pow,result:rel?'win':'risky'};
     }
@@ -527,15 +534,20 @@ function calcAtk(mode, preSpent, preClosed){
       .filter(p=>PAC[p.id]<MAX_ATK&&canBeat(p,bestSlot.effPow,bestSlot.tt))
       .map(p=>{
         const beat=canBeat(p,bestSlot.effPow,bestSlot.tt);
-        const oc=opportunityCost(p,bestSlot);
         const waste=beat.pow-bestSlot.effPow;
-        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?2:0;
-        return{p,beat,oc,waste,sameBldg};
+        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?5:0;
+        return{p,beat,waste,sameBldg};
       }).filter(c=>c.beat);
 
     if(!cands.length){assigned.add(bestSlot.bid+':'+bestSlot.defIdx);continue}
 
-    cands.sort((a,b)=>a.oc-b.oc||a.waste-b.waste||b.sameBldg-a.sameBldg);
+    // Heroes: strongest player on scarcest slot (scarcity loop ensures hardest first)
+    // Titans: weakest sufficient (predictable fights, save power)
+    // Same-building bonus for coordination
+    if(bestSlot.tt==='h')
+      cands.sort((a,b)=>b.beat.pow-a.beat.pow||b.sameBldg-a.sameBldg);
+    else
+      cands.sort((a,b)=>a.waste-b.waste||b.sameBldg-a.sameBldg);
 
     let pick=cands[0];
     const isCrit=CIT_UNLOCK.includes(bestSlot.bid)||bestSlot.bid==='citadel';
@@ -566,12 +578,15 @@ function calcAtk(mode, preSpent, preClosed){
       .map(p=>{
         const beat=canBeat(p,bestSlot.effPow,bestSlot.tt);
         const waste=beat.pow-bestSlot.effPow;
-        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?2:0;
+        const sameBldg=pp[p.id].some(a=>a.bid===bestSlot.bid)?5:0;
         return{p,beat,waste,sameBldg};
       }).filter(c=>c.beat);
 
     if(!cands.length){assigned.add(bestSlot.bid+':'+bestSlot.defIdx);continue}
-    cands.sort((a,b)=>a.waste-b.waste||b.sameBldg-a.sameBldg);
+    if(bestSlot.tt==='h')
+      cands.sort((a,b)=>b.beat.pow-a.beat.pow||b.sameBldg-a.sameBldg);
+    else
+      cands.sort((a,b)=>a.waste-b.waste||b.sameBldg-a.sameBldg);
     assignSlot(bestSlot,cands[0].p,cands[0].beat);
   }
   checkAllCaptures();
@@ -891,8 +906,8 @@ function renderResults(){
 
   // Legend
   h+=`<div style="display:flex;gap:8px;font-size:10px;color:var(--tx2);margin-bottom:8px;flex-wrap:wrap">
-    <span><span class="pill pw">WIN</span> ≥${CFG.winMargin}%</span>
-    <span><span class="pill pw2">RISKY</span> &lt;${CFG.winMargin}%</span>
+    <span><span class="pill pw">WIN</span> ⚔️≥${CFG.heroMargin}% ⚡≥${CFG.titanMargin}%</span>
+    <span><span class="pill pw2">RISKY</span> below margin</span>
     <span><span class="pill pw2">🎲</span> gamble</span>
     <span>🚧 risk</span>
   </div>`;
@@ -1134,7 +1149,9 @@ function loadLS(){
     if(c.fightPts) CFG.fightPts=c.fightPts;
     if(c.titanBoost!==undefined) CFG.titanBoost=c.titanBoost;
     if(c.titanPenalty!==undefined) CFG.titanPenalty=c.titanPenalty;
-    if(c.winMargin!==undefined) CFG.winMargin=c.winMargin;
+    if(c.heroMargin!==undefined) CFG.heroMargin=c.heroMargin;
+    if(c.titanMargin!==undefined) CFG.titanMargin=c.titanMargin;
+    if(c.winMargin!==undefined&&c.heroMargin===undefined) CFG.heroMargin=c.winMargin; // migrate old
     if(c.ghostInsurance!==undefined) CFG.ghostInsurance=c.ghostInsurance;
     return true;
   }catch(e){return false}
@@ -1153,7 +1170,8 @@ function syncSettings(){
   document.getElementById('fptInp').value=CFG.fightPts;
   document.getElementById('boostInp').value=CFG.titanBoost;
   document.getElementById('penaltyInp').value=CFG.titanPenalty;
-  document.getElementById('marginInp').value=CFG.winMargin;
+  document.getElementById('hMarginInp').value=CFG.heroMargin;
+  document.getElementById('tMarginInp').value=CFG.titanMargin;
   document.getElementById('ghostInsInp').checked=CFG.ghostInsurance;
 }
 function renderAll(){renderScore();renderRoster();renderTab(activeTab);updateButtons();saveLS()}
