@@ -475,17 +475,18 @@ function calcAtk(mode, preSpent, preClosed){
   }
   checkCaps();
   let score=0;BLDGS.forEach(b=>{if(plan[b.id].locked)return;
-    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky').length*CFG.fightPts;
+    score+=plan[b.id].slots.filter(s=>s.result==='win'||s.result==='risky'||s.result==='closed').length*CFG.fightPts;
     if(plan[b.id].captured)score+=b.bonus});
   return{plan,pp,score};
 }
 
 // ═══ SCORE + RUN ═══
-function getScore(plan){if(!plan)return{wins:0,risky:0,bonus:0,total:0,caps:0,totalWins:0};
-  let wins=0,risky=0,bonus=0,caps=0;BLDGS.forEach(b=>{const p=plan[b.id];if(!p||p.locked)return;
+function getScore(plan){if(!plan)return{wins:0,risky:0,closed:0,bonus:0,total:0,caps:0,totalWins:0};
+  let wins=0,risky=0,closed=0,bonus=0,caps=0;BLDGS.forEach(b=>{const p=plan[b.id];if(!p||p.locked)return;
     wins+=p.slots.filter(s=>s.result==='win').length;risky+=p.slots.filter(s=>s.result==='risky').length;
+    closed+=p.slots.filter(s=>s.result==='closed').length;
     if(p.captured){bonus+=p.bonus;caps++}});
-  const tw=wins+risky;return{wins,risky,totalWins:tw,bonus,total:tw*CFG.fightPts+bonus,caps}}
+  const tw=wins+risky;return{wins,risky,closed,totalWins:tw,bonus,total:(tw+closed)*CFG.fightPts+bonus,caps}}
 function runCalc(){
   try{
     spentAttempts={};closedSlots=new Set();
